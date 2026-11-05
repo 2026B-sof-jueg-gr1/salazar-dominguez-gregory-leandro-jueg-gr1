@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Escape del Maizal</title>
+  <title>Hay algo en el maizal</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -15,24 +15,115 @@
     .wrap { width: min(100%, 1000px); padding: 18px; text-align: center; }
     h1 { margin: 0 0 5px; color: #b9e77c; font-size: clamp(22px, 4vw, 34px); letter-spacing: 2px; }
     .subtitle { margin: 0 0 14px; color: #a8bdd9; font-size: 13px; }
-    #game { width: 100%; border: 3px solid #304b68; border-radius: 8px; overflow: hidden; box-shadow: 0 0 35px #000b; }
-    #game canvas { display: block; width: 100% !important; height: auto !important; image-rendering: pixelated; }
+    .stage { position: relative; border: 3px solid #304b68; border-radius: 8px; overflow: hidden; box-shadow: 0 0 35px #000b; background: #000; }
+    #view { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+    .hidden { display: none !important; }
+
+    .panel { position: absolute; background: rgba(4, 9, 18, .92); color: #e8f1ff; text-align: left; line-height: 1.5; }
+    .panel.full { inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8% 10%; text-align: center; }
+    .panel.full p { font-size: clamp(14px, 2.1vw, 19px); margin: 0 0 22px; white-space: pre-line; }
+    .panel.bottom { left: 0; right: 0; bottom: 0; padding: 12px 16px; border-top: 2px solid #3d6a4a; font-size: clamp(12px, 1.7vw, 15px); }
+    .panel.center { left: 10%; right: 10%; top: 12%; padding: 18px 22px; border: 2px solid #6a8a3d; border-radius: 6px; font-size: clamp(12px, 1.8vw, 15px); }
+
+    button {
+      font-family: inherit; font-size: clamp(12px, 1.6vw, 14px); color: #fff1a6; background: #203650;
+      border: 1px solid #607995; border-radius: 4px; padding: 7px 12px; cursor: pointer; margin: 3px 4px 3px 0;
+    }
+    button:hover:not(:disabled) { background: #2d4a6d; }
+    button:disabled { opacity: .35; cursor: default; }
+    button.danger { color: #ffb0b6; border-color: #a04450; }
+    button.safe { color: #c9ff9c; border-color: #4f9a56; }
+
+    #dlgName { color: #b9f66d; font-weight: bold; margin-bottom: 4px; }
+    #dlgLog { max-height: 118px; overflow-y: auto; margin-bottom: 8px; }
+    #dlgLog div { margin: 2px 0; }
+    #dlgLog .you { color: #9fcaff; }
+    #dlgLog .narr { color: #a8a8a8; font-style: italic; }
+    #dlgLog .res { color: #fff1a6; }
+    #endTitle { font-size: clamp(26px, 6vw, 46px); font-weight: bold; margin: 0 0 14px; }
+    #endTitle.win { color: #b9f66d; }
+    #endTitle.lose { color: #ff5b68; }
+    #toast {
+      position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+      background: rgba(4, 9, 18, .85); border: 1px solid #607995; border-radius: 4px;
+      padding: 6px 12px; font-size: 13px; color: #fff1a6; pointer-events: none; opacity: 0; transition: opacity .25s;
+    }
+    #toast.show { opacity: 1; }
+
+    /* Menú de inicio */
+    .panel.menu { background: radial-gradient(ellipse at center, rgba(2,6,12,.45) 0%, rgba(0,0,0,.93) 78%); overflow: hidden; }
+    .menu-inner { position: relative; z-index: 2; }
+    .menu-title {
+      font-size: clamp(30px, 7.5vw, 76px); font-weight: bold; letter-spacing: .12em; line-height: 1.08; color: #cfe8a8;
+      text-shadow: 0 0 18px #4f9a3a, 0 0 42px #1d4d22; animation: flick 6s infinite;
+    }
+    .menu-sub { margin: 18px 0 34px; color: #6f8a73; letter-spacing: .35em; font-size: clamp(11px, 1.6vw, 15px); animation: sub 7s infinite; }
+    .menu-btn { font-size: clamp(14px, 2vw, 18px); letter-spacing: .4em; padding: 10px 28px; color: #b9d29a; background: transparent; border: 1px solid #3d5a3f; transition: all .4s; }
+    .menu-btn:hover:not(:disabled) { background: rgba(60, 100, 55, .25); color: #eaffc9; box-shadow: 0 0 22px #2f6a30; letter-spacing: .5em; }
+    .menu-foot { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #3f4f44; font-size: 12px; letter-spacing: .3em; z-index: 2; }
+    #menuEyes { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+    .eyes { position: absolute; width: 26px; height: 6px; opacity: 0; animation: blink linear infinite; }
+    .eyes::before, .eyes::after { content: ""; position: absolute; top: 0; width: 5px; height: 5px; border-radius: 50%; background: #ff2a3a; box-shadow: 0 0 8px 3px #ff2a3a; }
+    .eyes::before { left: 0; } .eyes::after { right: 0; }
+    @keyframes blink { 0%, 62% { opacity: 0; } 64%, 66% { opacity: .95; } 67% { opacity: 0; } 69%, 80% { opacity: .85; } 82%, 100% { opacity: 0; } }
+    @keyframes flick { 0%, 90%, 100% { opacity: 1; } 91% { opacity: .25; } 92% { opacity: 1; } 94% { opacity: .5; } 95% { opacity: 1; } }
+    @keyframes sub { 0%, 40%, 100% { opacity: .35; } 55% { opacity: 1; } 70% { opacity: .2; } }
+    #end.win-end { background: linear-gradient(to top, rgba(2,6,12,.9) 0%, rgba(2,6,12,0) 68%); justify-content: flex-end; padding-bottom: 5%; }
+    #end.lose-end { background: rgba(0,0,0,.2); justify-content: flex-end; padding-bottom: 5%; }
+    #endMenuBtn { color: #a8bdd9; }
     .help { margin: 12px 0 0; color: #bdcce0; font-size: 13px; line-height: 1.6; }
     kbd { padding: 2px 6px; border: 1px solid #607995; border-radius: 4px; background: #15263b; color: #fff; }
   </style>
 </head>
 <body>
   <main class="wrap">
-    <h1>ESCAPE DEL MAIZAL</h1>
-    <p class="subtitle">Una noche. Un maizal. Algo te está buscando.</p>
-    <div id="game" aria-label="Juego Escape del Maizal"></div>
+    <div class="stage">
+      <canvas id="view" aria-label="Hay algo en el maizal, vista en primera persona"></canvas>
+
+      <div id="menu" class="panel full menu">
+        <div id="menuEyes"></div>
+        <div class="menu-inner">
+          <div class="menu-title">HAY ALGO<br>EN EL MAIZAL</div>
+          <div class="menu-sub">No estás solo.</div>
+          <button id="menuBtn" class="menu-btn">ENTRAR</button>
+        </div>
+        <div class="menu-foot">W A S D · mouse</div>
+      </div>
+
+      <div id="intro" class="panel full hidden">
+        <p id="introText"></p>
+        <button id="introBtn">Continuar ▶</button>
+      </div>
+
+      <div id="dialog" class="panel bottom hidden">
+        <div id="dlgName"></div>
+        <div id="dlgLog"></div>
+        <div id="dlgQs"></div>
+        <div id="dlgDecide">
+          <button id="btnSpare" class="safe">[E] Dejar vivir</button>
+          <button id="btnKill" class="danger">[F] Acabar con su vida</button>
+        </div>
+        <button id="btnContinue" class="hidden">Continuar ▶</button>
+      </div>
+
+      <div id="diary" class="panel center hidden"></div>
+
+      <div id="end" class="panel full hidden">
+        <div id="endTitle"></div>
+        <p id="endText"></p>
+        <button id="endBtn">Jugar de nuevo [R]</button>
+        <button id="endMenuBtn">Volver al inicio</button>
+      </div>
+
+      <div id="toast"></div>
+    </div>
+
     <p class="help">
-      Muévete con <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o las flechas.
-      Encuentra la salida luminosa. El alien puede atravesar el maíz y se oculta entre las plantas.
-      Pulsa <kbd>R</kbd> para reiniciar.
+      <kbd>Mouse</kbd> mirar (clic en el juego para activarlo; <kbd>Esc</kbd> lo libera) · <kbd>W</kbd>/<kbd>↑</kbd> adelante · <kbd>S</kbd>/<kbd>↓</kbd> atrás · <kbd>A</kbd>/<kbd>←</kbd> izquierda · <kbd>D</kbd>/<kbd>→</kbd> derecha ·
+      <kbd>J</kbd> recuerdos del viaje · <kbd>M</kbd> mapa · <kbd>R</kbd> reiniciar.<br>
+      Sigue la luz verde en el cielo. El alien atraviesa el maíz y se oculta entre las plantas.
     </p>
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
