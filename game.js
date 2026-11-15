@@ -5,7 +5,7 @@ function showError(msg) {
     let el = document.getElementById("errbox");
     if (!el) {
       el = document.createElement("div"); el.id = "errbox";
-      el.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:9999;max-width:70vw;padding:6px 10px;font:12px monospace;color:#ffd0d0;background:rgba(60,0,0,.9);border:1px solid #a04450;border-radius:4px;white-space:pre-wrap";
+      el.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:9999;max-width:70vw;padding:8px 12px;font:13px 'Atkinson Hyperlegible',system-ui,sans-serif;color:#ffd0d0;background:rgba(40,4,8,.94);border:2px solid #ff5b68;box-shadow:4px 4px 0 rgba(0,0,0,.65);white-space:pre-wrap";
       document.body.appendChild(el);
     }
     el.textContent = "Error: " + msg;
@@ -407,7 +407,7 @@ function mzSaveText(e, cx) {
   if (e.rejoin) return `${e.name} vuelve contigo, avergonzado.`;
   return {
     Samira: "Samira se une. Recuerda por dónde vino: marca un tramo del camino.",
-    Sebas: "Sebas se une. Graba todo con su celular: la imagen se llena de estática frente a lo que no es humano. Pero se desespera rápido.",
+    Sebas: "Sebas se une. Vio a alguien cerca de aquí y te lo marca en el mapa: ve a buscarlo. Pero Sebas solo vio una cara… y se desespera rápido.",
     Paul: "Paul se une. Si esa cosa te alcanza, se le lanza encima.",
     Stalin: "Stalin se une. Siente dónde está esa cosa: la ves en tu mapa."
   }[e.name];
@@ -415,41 +415,10 @@ function mzSaveText(e, cx) {
 function mzGivePerk(name, on) {
   const P = G.perk;
   if (name === "Samira" && on) revealAhead(20);
-  if (name === "Sebas") P.cam = on;
+  if (name === "Sebas" && on && !P.spotUsed) { P.spotUsed = true; mzSebasSpot(G.cur ? { x: G.cur.bx, y: G.cur.by } : { x: G.px, y: G.py }); }   // una sola vez
   if (name === "Paul") P.shield = on ? 1 : 0;
   if (name === "Stalin") P.stalin = on;
 }
-// El celular de Sebas: la imagen se llena de estática frente a un impostor (casi siempre),
-// igual que la radio del bar cerca de don Lucho. Con el alien cerca, a veces también tiembla con amigos reales.
-function camStatic(e) {
-  const near = Math.hypot(G.ax - G.px, G.ay - G.py) < 6;
-  return e.impostor ? (Math.random() < 0.85 ? 1 : 0.3) : (near ? 0.5 : 0.08);
-}
-function drawSebasCam() {
-  const e = G.cur;
-  if (!e || G.state !== "dialog" || !G.perk.cam || e.mercy || e.static == null) return;
-  const x0 = 14, y0 = 46, w = 92, h = 122, img = e.mode === "hidden" ? null : mzImg(e);
-  ctx.save();
-  ctx.fillStyle = "#0b0c10"; ctx.fillRect(x0 - 5, y0 - 5, w + 10, h + 18);
-  ctx.fillStyle = "#07100a"; ctx.fillRect(x0, y0, w, h);
-  if (img) { const ih = h * 0.8, iw = ih * img.width / img.height; ctx.globalAlpha = 0.85; ctx.drawImage(img, x0 + w / 2 - iw / 2, y0 + h - ih - 4, iw, ih); ctx.globalAlpha = 1; }
-  else { ctx.fillStyle = "#16301a"; for (let x = 0; x < w; x += 7) ctx.fillRect(x0 + x, y0, 3, h); }        // solo maíz
-  ctx.fillStyle = "rgba(70,160,80,.3)"; ctx.fillRect(x0, y0, w, h);                                   // visión nocturna
-  const st = e.static * (0.7 + 0.3 * Math.random());
-  for (let k = 0, n = 30 + st * 1100; k < n; k++) {
-    const v = 150 + Math.floor(Math.random() * 105);
-    ctx.fillStyle = `rgba(${v},${v},${v},${(Math.random() * (0.25 + st * 0.6)).toFixed(2)})`;
-    ctx.fillRect(x0 + Math.random() * w, y0 + Math.random() * h, 1 + Math.random() * 3 * st, 1);
-  }
-  if (st > 0.5) for (let k = 0; k < 5; k++) { ctx.fillStyle = `rgba(230,230,230,${(0.18 + Math.random() * 0.25).toFixed(2)})`; ctx.fillRect(x0, y0 + Math.random() * h, w, 1 + Math.random() * 4); }
-  ctx.fillStyle = Math.floor(performance.now() / 500) % 2 ? "#ff3030" : "#5a1010";
-  ctx.beginPath(); ctx.arc(x0 + 9, y0 + 9, 3.5, 0, 7); ctx.fill();
-  ctx.fillStyle = "#e8e8e8"; ctx.font = "bold 9px 'Courier New', monospace"; ctx.textBaseline = "alphabetic";
-  ctx.fillText("REC", x0 + 16, y0 + 12);
-  ctx.fillStyle = "#e8b84a"; ctx.fillText("celular de Sebas", x0 - 2, y0 + h + 10);
-  ctx.restore();
-}
-
 function mzDiaryLines() {
   const cx = (G && G.cx) || mzContext(), L = [{ h: "Lo que sabes" }];
   L.push(`• Tú manejabas la Azulita. ${cx.copilot} iba de copiloto.`);
@@ -737,10 +706,10 @@ function spawnCandidates() {
   }
   return out.sort((a, b) => (a.seen - b.seen) || (Math.abs(a.d - 5) - Math.abs(b.d - 5)));
 }
-function mzSpawn(spec) {
+function mzSpawn(spec, custom) {
   const s = mzSpec(spec.name, spec.impostor, G.cx);
   const mode = spec.mercy || spec.rejoin ? "middle" : s.mode, pose = spec.mercy ? "sit" : s.pose;
-  const cands = spawnCandidates();
+  const cands = custom || spawnCandidates();
   if (!cands.length) return false;
   const pickC = test => cands.find(c => !c.seen && test(c)) || cands.find(test);
   const mk = (c, extra) => {
@@ -801,6 +770,38 @@ function mzSpawnTick(dt) {
   const spec = G.queue[i];
   if (mzSpawn(spec)) { G.queue.splice(i, 1); G.moved = 0; }
 }
+// La habilidad de Sebas: vio a alguien entre el maíz, cerca de donde lo encontraste. Esa persona aparece
+// ahí mismo (puede ser tu amigo o esa cosa: Sebas solo vio una cara) y queda marcada en el minimapa, con el
+// camino para llegar. Sale a su manera de siempre (escondido, asomándose o en medio) y solo pasa una vez.
+function mzSebasSpot(src) {
+  const i = G.queue.findIndex(q => !q.mercy && !q.rejoin && q.name !== "Sebas" && !mzSpec(q.name, q.impostor, G.cx).near);   // Stalin, el real, solo está cerca de la luz
+  if (i < 0) return null;
+  const sx = Math.floor(src.x), sy = Math.floor(src.y), D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const dist = new Map([[sy * COLS + sx, 0]]), prev = new Map(), q = [[sx, sy]], cands = [];
+  for (let h = 0; h < q.length; h++) {                   // casillas a pocos pasos de Sebas, por el camino
+    const [x, y] = q[h], d = dist.get(y * COLS + x);
+    if (d >= 7) continue;
+    for (const [ox, oy] of D4) {
+      const nx = x + ox, ny = y + oy, k = ny * COLS + nx;
+      if (isWall(nx, ny) || dist.has(k)) continue;
+      dist.set(k, d + 1); prev.set(k, [x, y]); q.push([nx, ny]);
+      if (d + 1 >= 3 && !"o=X".includes(MAP[ny][nx]))
+        cands.push({ x: nx, y: ny, f: [ox, oy], d: d + 1, seen: lineOfSight(G.px, G.py, nx + 0.5, ny + 0.5) && Math.hypot(nx + 0.5 - G.px, ny + 0.5 - G.py) < 5 });
+    }
+  }
+  if (!cands.length) return null;
+  cands.sort((a, b) => (a.seen - b.seen) || (Math.abs(a.d - 5) - Math.abs(b.d - 5)) || (Math.random() - 0.5));
+  const spec = G.queue[i], before = G.enc.length;
+  if (!mzSpawn(spec, cands.slice(0, 8))) return null;
+  G.queue.splice(i, 1); G.moved = 0;
+  const e = G.enc.slice(before).find(x => x.name === spec.name) || G.enc[G.enc.length - 1];
+  e.beacon = true; e.spotted = true; G.showMap = true;
+  for (let c = [Math.floor(e.bx), Math.floor(e.by)]; c; c = prev.get(c[1] * COLS + c[0])) {   // el camino desde Sebas, en el mapa
+    for (const [ox, oy] of [[0, 0], ...D4]) { const tx = c[0] + ox, ty = c[1] + oy; if (tx >= 0 && ty >= 0 && tx < COLS && ty < ROWS) G.seen[ty][tx] = true; }
+  }
+  voice(`«Pepe… c-creo que vi a ${e.name} por allá. Cerquita. ¿O era…? No sé. Te lo marqué.»`, "Sebas");
+  return e;
+}
 // Al resolver un encuentro, una pausa antes del próximo (más larga después de un impostor)
 function mzAfterEncounter(e) { G.spawnCD = e.impostor ? 16 : 9; G.moved = 0; }   // antes: 40 y 26 s
 
@@ -822,7 +823,7 @@ function mzRunnerTick() {
   if (G.ran || !G.runAt || G.t < G.runAt || !G.party.includes(G.runner)) return;
   const name = G.runner;
   G.ran = true; G.party = G.party.filter(n => n !== name); G.saved = Math.max(0, G.saved - 1); mzGivePerk(name, false);
-  toast(name === "Sebas" ? "«¡No, no, no! ¡Lo vi!» Sebas se pierde entre el maíz." : "«¡Ahí está! ¡Ahí está!» Samira se pierde entre el maíz.", "danger", `${name} sale corriendo`, 2.8);
+  toast(name === "Sebas" ? "«¡No, no, no! ¡Lo vi!» Sebas se pierde entre el maíz." : "«¡Ahí está! ¡Ahí está!» Samira se pierde entre el maíz.", "danger", `${name} sale corriendo`, 1.45);
   scream();
   try { AMBIENT.steps(0, 1.3); AMBIENT.rustle(0, 1.2); } catch (e) { /* sin audio */ }
   const img = charSprite(name), vx = Math.cos(G.ang), vy = Math.sin(G.ang);
@@ -836,8 +837,8 @@ function mzRunnerTick() {
 function mzFleeTick(dt) {
   const f = G.flee; if (!f) return;
   f.t += dt;
-  if (f.t > 0.8) { f.x += f.vx * dt * 4.2; f.y += f.vy * dt * 4.2; }   // primero se espanta, después corre
-  if (f.t > 2.6) G.flee = null;
+  if (f.t > 0.45) { f.x += f.vx * dt * 5; f.y += f.vy * dt * 5; }   // primero se espanta, después corre
+  if (f.t > 1.4) G.flee = null;
 }
 
 let G;
@@ -882,6 +883,7 @@ function initAudio() {
 function sndVolume(v) {
   SND.vol = clamp(v, 0, 1);
   if (SND.master) SND.master.gain.setTargetAtTime(SND.vol, AC.currentTime, 0.05);
+  for (const k in SND.loops) { const L = SND.loops[k]; if (L.el && !L.routed) L.el.volume = clamp(SND.vol * L.base * L.level, 0, 1); }   // sin la mezcla
   try { localStorage.setItem("maizal.vol", String(SND.vol)); } catch (e) { /* sin almacenamiento */ }
 }
 function sndGain(vol, bus, pan) {
@@ -929,6 +931,51 @@ function sndStop(name, fade) {
   } catch (e) { /* nada */ }
 }
 function sndStopAll() { for (const k in SND.loops) sndStop(k); }
+/* ---------- Música en loop, en streaming ----------
+ * Se toca desde un <audio>: se va descargando mientras suena y no se decodifica entera en memoria.
+ * Formato: Opus (.ogg), que pesa poco y suena bien a pocos kbps; donde no hay Opus (Safari), la copia .mp3.
+ * Servida por http(s), pasa por la mezcla del juego (volumen general, filtro para que suene lejos o detrás
+ * de una pared). Abierta como archivo (file://) el navegador no deja procesarla: solo se ajusta su volumen. */
+let MUSIC_DIR = "audio/";
+const MUSIC_OPUS = (() => { try { return !!document.createElement("audio").canPlayType('audio/ogg; codecs="opus"'); } catch (e) { return false; } })();
+function sndMusic(name, file, base) {
+  if (!AC) return null;
+  return sndLoop(name, out => {
+    const el = new Audio();
+    el.loop = true; el.preload = "auto";
+    el.src = MUSIC_DIR + file + (MUSIC_OPUS ? ".ogg" : ".mp3");
+    el.addEventListener("ended", () => { try { el.currentTime = 0; } catch (e) { /* no se puede saltar */ } const p = el.play(); if (p && p.catch) p.catch(() => {}); });   // por si el servidor no deja volver al inicio
+    const L = { el, base, level: 1, srcs: [{ stop() { el.pause(); el.removeAttribute("src"); el.load(); } }] };
+    if (location.protocol !== "file:") {
+      try {
+        const src = AC.createMediaElementSource(el), lp = AC.createBiquadFilter(), g = AC.createGain();
+        lp.type = "lowpass"; lp.frequency.value = 18000; g.gain.value = base;
+        src.connect(lp); lp.connect(g); g.connect(out);
+        L.routed = true; L.lp = lp; L.gain = g;
+      } catch (e) { L.routed = false; }
+    }
+    if (!L.routed) el.volume = clamp(SND.vol * base, 0, 1);
+    if (!PAUSED) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+    return L;
+  });
+}
+// Cuánto suena (0..1 de su volumen base) y qué tan apagada (corte en Hz; solo con la mezcla del juego)
+function sndMusicSet(name, level, cutoff) {
+  const L = SND.loops[name]; if (!L || !L.el) return;
+  if (L.lastLv != null && Math.abs(level - L.lastLv) < 0.01 && (!cutoff || Math.abs(cutoff - L.lastCut) < L.lastCut * 0.03)) return;   // no llenar la línea de tiempo del audio
+  L.lastLv = level; L.lastCut = cutoff || L.lastCut;
+  if (L.routed) {
+    const t = AC.currentTime;
+    L.gain.gain.setTargetAtTime(L.base * level, t, 0.15);
+    if (cutoff) L.lp.frequency.setTargetAtTime(cutoff, t, 0.2);
+  } else L.el.volume = clamp(SND.vol * L.base * level, 0, 1);
+}
+function sndMusicPause(on) {
+  for (const k in SND.loops) {
+    const L = SND.loops[k]; if (!L.el) continue;
+    if (on) L.el.pause(); else { const p = L.el.play(); if (p && p.catch) p.catch(() => {}); }
+  }
+}
 const sndSafe = fn => (...a) => { if (!AC) return; try { fn(...a); } catch (e) { /* sin audio */ } };
 
 /* ---------- Efectos ---------- */
@@ -1035,7 +1082,7 @@ function storyOpen(pages, last, done) {
 function storyShow() {
   const sp = STORYP;
   $("introText").textContent = sp.pages[sp.i];
-  $("introBtn").textContent = sp.i === sp.pages.length - 1 ? sp.last : "Continuar ▶";
+  $("introBtn").textContent = sp.i === sp.pages.length - 1 ? sp.last : "Continuar »";
 }
 function storyNext() {
   const sp = STORYP;
@@ -1047,7 +1094,10 @@ function storyNext() {
 }
 
 // Líneas: texto suelto, o { h: título }, { sub: subtítulo }, { note: nota gris }
-const DIARY_CSS = { h: "color:#b9f66d;font-weight:bold;margin-bottom:6px", sub: "color:#fff1a6;margin-top:8px", note: "color:#a8bdd9;margin-top:8px" };
+const DIARY_CSS = {                                       // mismos tokens que game.html
+  h: "font-family:var(--font-pixel);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);margin-bottom:12px",
+  sub: "font-family:var(--font-pixel);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:16px 0 6px",
+  note: "font-size:13px;color:var(--fg-mute);margin-top:12px" };
 const diaryOpen = () => !$("diary").classList.contains("hidden");
 function diaryToggle(lines) {
   const d = $("diary");
@@ -1067,7 +1117,7 @@ function diaryToggle(lines) {
 const END = { next: null, retry: null };
 function endScreen(o) {
   releaseMouse();
-  $("endTitle").textContent = o.title; $("endTitle").className = o.win ? "win" : "lose";
+  $("endTitle").textContent = o.title; $("endTitle").className = "t-title " + (o.win ? "win" : "lose");
   $("endText").textContent = o.text;
   $("end").className = "panel full" + (o.style ? " " + o.style : "");
   END.next = o.next ? o.next[1] : null; END.retry = o.retry ? o.retry[1] : null;
@@ -1080,31 +1130,49 @@ function endKey(c) {
   return false;
 }
 
-const HUD_BG = "rgba(7,12,20,.82)", HUD_FONT = "'Courier New', monospace";
-function hudPanel(rows, w) {                            // recuadro de arriba a la izquierda; rows: [{ t, c (color), f (letra) }]
-  const h = 10 + rows.length * 18;
-  ctx.fillStyle = HUD_BG; ctx.fillRect(10, 10, w, h);
+/* ---------- Sistema de diseño en el lienzo: los mismos tokens de game.html ----------
+ * pixel: títulos, etiquetas y teclas (11 px en el lienzo, que se ve a ~16 px en pantalla) · text: frases
+ * Todo recuadro del HUD es el mismo: fondo de panel, borde de 2 px y sombra dura. Margen al borde: 10 px. */
+const UI = {
+  pixel: '"Silkscreen", "Courier New", monospace', text: '"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif',
+  bg: "rgba(7,11,19,.9)", line: "#2a3d57", lineHi: "#4d6b8f", fg: "#e8eef7", dim: "#9aabc2", mute: "#5d6e86",
+  acc: "#b9f66d", gold: "#ffe08a", warn: "#ffb347", danger: "#ff5b68", m: 10, px: 11
+};
+const HUD_BG = UI.bg;
+const uiPixel = (px) => `${px || UI.px}px ${UI.pixel}`;
+const uiText = (px, bold) => `${bold ? "bold " : ""}${px || 12}px ${UI.text}`;
+function uiBox(x, y, w, h, line) {                      // el recuadro de siempre
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(x + 3, y + 3, w, h);      // sombra dura
+  ctx.fillStyle = UI.bg; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = line || UI.line; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+}
+// Recuadro de arriba a la izquierda. rows: [{ t, c }]: la primera fila es un título (píxel), las demás, frases
+function hudPanel(rows) {
   ctx.textBaseline = "middle"; ctx.textAlign = "left";
-  rows.forEach((r, i) => { ctx.font = `${r.f || "bold 14px"} ${HUD_FONT}`; ctx.fillStyle = r.c || "#fff1a6"; ctx.fillText(r.t, 20, 24 + i * 18); });
+  let w = 0;
+  rows.forEach((r, i) => { ctx.font = i ? uiText(12) : uiPixel(); w = Math.max(w, ctx.measureText(r.t).width); });
+  const h = 12 + 10 + (rows.length - 1) * 16, bw = Math.ceil(w) + 24;
+  uiBox(UI.m, UI.m, bw, h);
+  rows.forEach((r, i) => { ctx.font = i ? uiText(12) : uiPixel(); ctx.fillStyle = r.c || (i ? UI.dim : UI.gold); ctx.fillText(r.t, UI.m + 12, UI.m + 11 + (i ? 4 + i * 16 : 0)); });
   ctx.textBaseline = "alphabetic";
   return h;
 }
 function hudCorner(msg, y) {                            // recordatorio de teclas, arriba a la derecha
-  ctx.font = `12px ${HUD_FONT}`; ctx.fillStyle = "#a8bdd9"; ctx.textBaseline = "middle"; ctx.textAlign = "right";
-  ctx.fillText(msg, W - 14, y || 22);
+  ctx.font = uiPixel(); ctx.fillStyle = UI.dim; ctx.textBaseline = "middle"; ctx.textAlign = "right";
+  ctx.fillText(msg.toUpperCase(), W - UI.m - 2, y || 22);
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
 function hudPrompt(msg) {                               // lo que puedes hacer ahora mismo, abajo al centro
-  ctx.font = `bold 13px ${HUD_FONT}`; ctx.textBaseline = "middle";
-  const w = ctx.measureText(msg).width + 24;
-  ctx.fillStyle = HUD_BG; ctx.fillRect(W / 2 - w / 2, H - 46, w, 26);
-  ctx.fillStyle = "#fff1a6"; ctx.textAlign = "center"; ctx.fillText(msg, W / 2, H - 33);
+  ctx.font = uiPixel(); ctx.textBaseline = "middle";
+  const t = msg.toUpperCase(), w = Math.ceil(ctx.measureText(t).width) + 28;
+  uiBox(Math.round(W / 2 - w / 2), H - 50, w, 26, UI.gold);
+  ctx.fillStyle = UI.gold; ctx.textAlign = "center"; ctx.fillText(t, W / 2, H - 36);
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
 function hudMouseHint() {
   if (document.pointerLockElement === cv) return;
-  ctx.font = `12px ${HUD_FONT}`; ctx.fillStyle = "#a8bdd9"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("Haz clic para mirar con el mouse", W / 2, H - 30);
+  ctx.font = uiText(12); ctx.fillStyle = UI.dim; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("Haz clic para mirar con el mouse", W / 2, H - 36);
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
 // Avisos: una tarjeta visible arriba al centro. Si llegan varios, hacen fila y salen de a uno
@@ -1165,7 +1233,7 @@ function startFromMenu() {
 function toMenu() {
   releaseMouse(); talkClose(); mzOverlayClear();
   if (MODE === "chase" && CH) { chaseAudioStop(); CH.done = true; }
-  MODE = "menu"; sndStopAll(); hush(); ECHO = null; B = null; STORYP = null;
+  MODE = "menu"; sndStopAll(); ECHO = null; B = null; STORYP = null;
   G = newGameState("menu");
   showMenu();
 }
@@ -1186,9 +1254,7 @@ function startEncounter(e) {
   const lines = [[e.name, mzOpener(e, G.cx)]];
   const quirk = pick(e.impostor ? QUIRK_FAKE : QUIRK_REAL);
   if (quirk) lines.push(["", quirk]);
-  e.static = G.perk.cam ? camStatic(e) : null;
-  if (G.perk.cam) lines.push(["Sebas", e.static > 0.6 ? "¡P-Pepe, mira mi celular! ¡Se llena de estática!" : "En el celular se ve normal… creo… ¿no?"]);
-  const comp = G.party.filter(n => !(G.perk.cam && n === "Sebas")).pop();   // el último que se unió opina, a su manera
+  const comp = G.party[G.party.length - 1];                // el último que se unió opina, a su manera
   if (comp) lines.push([comp, mzOpinion(comp, e, G.cx)]);
   typeLines(lines, () => mzOptions(e));
 }
@@ -1454,33 +1520,6 @@ function mzBand(text, kind) {
 }
 function mzSub(text, who) { if (!MZO.sub || MZO.sub.text !== text) MZO.sub = { text, who, t: 0 }; }
 // Voces a lo lejos (bar y maizal): siempre como subtítulo de cinta, con el nombre de quien habla si se le reconoce
-/* ---------- Voces: se escucha lo que dicen (síntesis de voz del navegador) ----------
- * Cada personaje tiene su tono y su velocidad. El impostor usa la misma voz: copia voces. */
-const VOICE = { ok: typeof speechSynthesis !== "undefined", es: null };
-const VOICE_STYLE = {
-  paul: { pitch: 0.75, rate: 1.0 }, samira: { pitch: 1.4, rate: 1.08 }, sebas: { pitch: 1.15, rate: 1.18 }, stalin: { pitch: 0.9, rate: 0.88 },
-  lucho: { pitch: 0.55, rate: 0.8 }, carmen: { pitch: 1.25, rate: 0.95 }, radio: { pitch: 0.6, rate: 0.85 },
-  doble: { pitch: 0.85, rate: 0.95 }, rafael: { pitch: 0.55, rate: 0.75 }
-};
-function pickVoice() {
-  try { const vs = speechSynthesis.getVoices(); VOICE.es = vs.find(v => /^es[-_](EC|CO|PE|MX|419|US)/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null; } catch (e) { VOICE.es = null; }
-}
-if (VOICE.ok) { pickVoice(); try { speechSynthesis.onvoiceschanged = pickVoice; } catch (e) { /* nada */ } }
-function speak(who, text, vol) {
-  const c = charOf(who);
-  if (!VOICE.ok || !c || c.key === "pepe" || !SND.vol) return;
-  const clean = text.replace(/\([^)]*\)/g, " ").replace(/[«»*]/g, "").replace(/\s+/g, " ").trim();
-  if (!clean) return;
-  try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(clean), st = VOICE_STYLE[c.key] || {};
-    u.lang = VOICE.es ? VOICE.es.lang : "es-ES"; if (VOICE.es) u.voice = VOICE.es;
-    u.pitch = st.pitch || 1; u.rate = st.rate || 1; u.volume = clamp(SND.vol * (vol == null ? 1 : vol), 0, 1);
-    speechSynthesis.speak(u);
-  } catch (e) { /* sin voz */ }
-}
-function hush() { if (VOICE.ok) try { speechSynthesis.cancel(); } catch (e) { /* nada */ } }
-
 // Eco: ondas que salen del lugar de donde vino la voz (o del borde de la pantalla, si está fuera de vista)
 let ECHO = null;
 function echoFrom(x, y, who, S) {
@@ -1510,12 +1549,10 @@ function drawEcho(dt) {
   }
   ctx.restore();
 }
-// Una voz a lo lejos: subtítulo, se oye (si tiene quién la diga) y, si se sabe de dónde vino, eco hacia allá
+// Una voz a lo lejos: subtítulo y, si se sabe de dónde vino, eco hacia allá
 function voice(text, who, x, y) {
   mzSub(text.replace(/^\((.*)\)$/s, "$1"), who);
   const S = MODE === "bar" ? B : MODE === "final" ? FN : G;
-  const d = x != null && S ? Math.hypot(x - S.px, y - S.py) : 0;
-  if (who) speak(who, text, clamp(1.1 - d / 12, 0.35, 1));
   if (x != null && S) echoFrom(x, y, who, S);
 }
 function mzOverlayClear() { MZO.story = []; MZO.storyCur = null; MZO.band = []; MZO.bandCur = null; MZO.sub = null; }
@@ -1549,7 +1586,7 @@ function mzStoryKey() {                                  // Enter / clic: comple
   return true;
 }
 // Texto con la tipografía de los diálogos (las coordenadas vienen a media escala: x2 al dibujar)
-const MZO_FONT = (size, w) => `${w || "normal"} ${Math.round(size * 1.75)}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`;
+const MZO_FONT = (size, w, pixel) => pixel ? uiPixel() : `${w || "normal"} ${Math.round(size * 1.75)}px ${UI.text}`;
 function pxWrap(text, maxW, size) {
   ctx.font = MZO_FONT(size);
   const out = [], words = text.split(" "); let cur = "";
@@ -1560,7 +1597,7 @@ function pxWrap(text, maxW, size) {
 function pxDraw(items) {
   ctx.save(); ctx.textBaseline = "middle";
   for (const it of items) {
-    ctx.font = MZO_FONT(it.size, it.weight); ctx.textAlign = it.align || "center";
+    ctx.font = MZO_FONT(it.size, it.weight, it.pixel); ctx.textAlign = it.align || "center";
     const x = it.x * 2, y = it.y * 2;
     if (it.shadow) {                                     // corrimiento de color de cinta vieja
       ctx.globalAlpha = 0.55; ctx.fillStyle = it.shadow[0]; ctx.fillText(it.text, x - 1.5, y);
@@ -1570,7 +1607,7 @@ function pxDraw(items) {
   }
   ctx.restore();
 }
-const MZO_COL = { good: "#a6e07a", danger: "#ff5b68", warn: "#ffb347", info: "#e8c86a", story: "#e8c86a" };
+const MZO_COL = { good: UI.acc, danger: UI.danger, warn: UI.warn, info: UI.gold, story: UI.gold };
 function drawMzOverlay() {
   if (MODE !== "maizal" && MODE !== "bar" && MODE !== "chase" && MODE !== "final") return;
   const st = ovState();
@@ -1583,7 +1620,7 @@ function drawMzOverlay() {
     ctx.fillStyle = `rgba(0,0,0,${(0.75 * a).toFixed(2)})`; ctx.fillRect(0, yc - hh / 2, W, hh);
     ctx.fillStyle = "rgba(255,255,255,.05)"; for (let y = yc - hh / 2; y < yc + hh / 2; y += 3) ctx.fillRect(0, y, W, 1);
     ln.forEach((t, i) => items.push({ text: t, x: W / 4, y: yc / 2 + (i - (ln.length - 1) / 2) * 8, size: 9, color: "#f2f2f2", shadow: ["#ff304a", "#30e0ff"] }));
-    if (sub.who) items.push({ text: sub.who.toUpperCase(), x: W / 4, y: yc / 2 - hh / 4 - 1, size: 6, weight: "bold", color: charColor(sub.who, "#9fb3cc") });
+    if (sub.who) items.push({ text: sub.who.toUpperCase(), x: W / 4, y: yc / 2 - hh / 4 - 1, size: 6, pixel: true, color: charColor(sub.who, UI.dim) });
   }
   // B · franja de cine al centro
   const band = MZO.bandCur;
@@ -1605,8 +1642,8 @@ function drawMzOverlay() {
       const ln = pxWrap(s.text, W / 2 - 60, 11), lh = 12, y0 = H / 4 - (ln.length - 1) * lh / 2;
       let left = shown.length;
       ln.forEach((t, i) => { const part = t.slice(0, Math.max(0, left)); left -= t.length + 1; if (part) items.push({ text: part, x: W / 4, y: y0 + i * lh, size: 11, color: "#ffffff" }); });
-      if (s.title) items.push({ text: s.title.toUpperCase(), x: W / 4, y: y0 - 18, size: 8, weight: "bold", color: MZO_COL[s.kind] || MZO_COL.story });
-      if (s.t > 1.2) items.push({ text: "[Enter]", x: W / 4, y: y0 + ln.length * lh + 10, size: 8, color: "#7a8696" });
+      if (s.title) items.push({ text: s.title.toUpperCase(), x: W / 4, y: y0 - 18, size: 8, pixel: true, color: MZO_COL[s.kind] || MZO_COL.story });
+      if (s.t > 1.2) items.push({ text: "[ENTER]", x: W / 4, y: y0 + ln.length * lh + 12, size: 8, pixel: true, color: UI.mute });
     }
   }
   if (items.length) pxDraw(items);
@@ -2075,8 +2112,8 @@ function render(skipCine) {
   }
   if (G.flee && G.flee.img) {                               // el que se espantó: tiembla, y luego corre
     const f = G.flee;
-    const img = f.t < 0.8 ? rotSprite(f.img, Math.sin(f.t * 40) * 0.1) : rotSprite(f.img, Math.sin(f.t * 22) > 0 ? 0.16 : -0.16);
-    items.push({ img, x: f.x + (f.t < 0.8 ? Math.sin(f.t * 60) * 0.02 : 0), y: f.y, h: personH(f.img) });
+    const img = f.t < 0.45 ? rotSprite(f.img, Math.sin(f.t * 40) * 0.1) : rotSprite(f.img, Math.sin(f.t * 22) > 0 ? 0.16 : -0.16);
+    items.push({ img, x: f.x + (f.t < 0.45 ? Math.sin(f.t * 60) * 0.02 : 0), y: f.y, h: personH(f.img) });
   }
   if (M && G.flies) for (const f of G.flies) {              // luciérnagas sobre el maíz seco
     if (!mzFrozen()) G.flyT = performance.now() / 1000;
@@ -2103,15 +2140,13 @@ function render(skipCine) {
   ctx.restore();
   if (G.state === "shoot") drawShootFX();
   if (G.state === "play" || G.state === "dialog") { if (G.showMap) drawMinimap(); drawHud(); }
-  drawSebasCam();
   drawEcho(PAUSED ? 0 : 1 / 60);
   drawMzOverlay();
 }
 
 function drawMinimap() {
-  const T = 5, ox = W - COLS * T - 10, oy = 10;
-  ctx.fillStyle = "rgba(3,8,20,.72)";
-  ctx.fillRect(ox - 4, oy - 4, COLS * T + 8, ROWS * T + 8);
+  const T = 5, ox = W - COLS * T - UI.m - 6, oy = UI.m + 6;
+  uiBox(ox - 6, oy - 6, COLS * T + 12, ROWS * T + 12);
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (!G.seen[y][x]) continue;
     const ch = MAP[y][x];
@@ -2148,19 +2183,17 @@ function friendIcon(name, on) {
   return (ICONS[k] = cv2);
 }
 function drawHud() {
-  hudPanel([{ t: `AMIGOS A SALVO: ${G.saved}/${FRIENDS.length}`, c: "#e9f7c2" }], 215);
   if (BSPR.paul) FRIENDS.forEach((n, i) => {   // apagados hasta que se unen; tachados si se perdieron
-    const x = 232 + i * 30, y = 10, on = G.party.includes(n), lost = G.lost.includes(n);
-    ctx.fillStyle = HUD_BG; ctx.fillRect(x, y, 26, 26);
+    const S = 28, x = UI.m + i * (S + 6), y = UI.m, on = G.party.includes(n), lost = G.lost.includes(n);
+    uiBox(x, y, S, S, on ? charColor(n) : lost ? UI.danger : UI.line);
     const ic = friendIcon(n, on);
     ctx.save(); if (!on) ctx.globalAlpha = lost ? 0.5 : 0.4;
-    ctx.drawImage(ic, x + 2, y + 26 - ic.height);
+    ctx.drawImage(ic, x + 3, y + S - 2 - ic.height);
     ctx.restore();
-    ctx.strokeStyle = on ? charColor(n) : lost ? "#a03040" : "#2a3646"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, 24, 24);
-    if (lost) { ctx.strokeStyle = "#d04050"; ctx.beginPath(); ctx.moveTo(x + 5, y + 5); ctx.lineTo(x + 21, y + 21); ctx.moveTo(x + 21, y + 5); ctx.lineTo(x + 5, y + 21); ctx.stroke(); }
+    if (lost) { ctx.strokeStyle = UI.danger; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 6, y + 6); ctx.lineTo(x + S - 6, y + S - 6); ctx.moveTo(x + S - 6, y + 6); ctx.lineTo(x + 6, y + S - 6); ctx.stroke(); }
   });
   if (G.state !== "play") return;
-  hudCorner("[J] lo que sabes · [M] mapa", G.showMap ? ROWS * 5 + 30 : 22);   // debajo del minimapa
+  hudCorner("[J] lo que sabes · [M] mapa", G.showMap ? ROWS * 5 + 40 : 22);   // debajo del minimapa
   hudMouseHint();
 }
 
@@ -3133,7 +3166,7 @@ const DLG = {
     closed: { say: () => { F().samiraWary = true; return [["Samira", "No es tu problema, Pepe."], ["", "(Se cruza de brazos. Así no te lo va a contar.)"]]; }, back: true },
     angry: { say: () => { const f = F(); f.samiraSidedSebas = true; f.samiraWary = true; f.hintSebasPhone = true;
       return [["Samira", "¿Por nada? ¿Eso dice?"], ["", "(Se ríe sin ganas.)"], ["Samira", "Pregúntale por su celular. Pregúntale a qué hora se duerme."]]; }, back: true },
-    song: { say: () => { F().samiraSong = true; return [["Samira", "Pon lo que quieras. Igual nadie va a bailar."], ["", "(La rocola se traga la moneda y no suena nada. Solo estática.)"]]; }, back: true },
+    song: { say: () => { F().samiraSong = true; return [["Samira", "Pon lo que quieras. Igual nadie va a bailar."], ["", "(La rocola se traga la moneda y no cambia nada: sigue la misma canción de siempre, entre estática.)"]]; }, back: true },
     secret: { say: () => [
       ["Samira", "Me debe cuatrocientos dólares. Pero no es por la plata."],
       ["Samira", "Apuesta, Pepe. En el celular, todo el día. Me mintió tres veces mirándome a la cara. La última vez le creí."],
@@ -3339,14 +3372,13 @@ function talkSay(who, text) {
   $("talk").classList.remove("hidden"); $("talkLog").classList.add("hidden"); $("talkCtx").classList.add("hidden");
   $("talkOpts").innerHTML = ""; $("talkHead").innerHTML = "";
   $("talkLine").textContent = talkShow(who, text);
-  if (who) speak(who, text); else hush();
 }
 function talkClose() { cancelTyping(); ECHO = null; $("talk").classList.add("hidden"); $("talkLog").classList.add("hidden"); }
 function talkShow(who, text) {
   const narr = who === "", box = $("talkBox");
   box.className = "talk-box fade" + (narr ? " narr" : "");
   void box.offsetWidth;                                         // reinicia la animación
-  box.style.setProperty("--acc", charColor(who, "#7d8fa6"));
+  box.style.setProperty("--acc-who", charColor(who, UI.dim));
   $("talkWho").textContent = narr ? "" : who;
   $("talkNext").classList.add("hidden");
   if (!narr && drawPortrait($("talkPortrait").getContext("2d"), who, 40)) box.classList.add("has-portrait");   // el retrato de quien habla
@@ -3363,7 +3395,6 @@ function typerNext(gen) {
   const item = typer.queue.shift();
   if (!item) { typerFinish(); return; }
   const full = talkShow(item[0], item[1]), el = $("talkLine");
-  if (item[0]) speak(item[0], full); else hush();
   if (item[0] === "Tú") { el.textContent = full; typerLineDone(); return; }
   let i = 0;
   el.textContent = "";
@@ -3399,7 +3430,7 @@ function advanceTalk() {
   }
 }
 function cancelTyping() {
-  typer.gen++; hush();
+  typer.gen++;
   if (typer.timer) { clearInterval(typer.timer); typer.timer = null; }
   typer.cur = null; typer.queue = []; typer.onDone = null; typer.waiting = false;
 }
@@ -3571,7 +3602,7 @@ function barNightEnds() {
   lines.push(""); lines.push(rel.join(" "));
   BAR_RESULT = { keysBy, secrets: JSON.parse(JSON.stringify(B.secrets)), told: B.told.slice(), flags: { ...f } };
   endScreen({ title: `${clockText()} · A LA VÍA VIEJA`, text: lines.join("\n"), win: true,
-              next: ["Subir a la camioneta ▶", barContinue], retry: ["Repetir la noche [R]", startBar] });
+              next: ["Subir a la camioneta »", barContinue], retry: ["Repetir la noche [R]", startBar] });
   barAudio(false);
 }
 function barContinue() {
@@ -3583,11 +3614,12 @@ function startMaizalAfterChase() {
   MODE = "maizal";
   G = newGameState("intro");
   drone();
+  sndMusic("mzMusic", "maizal_music", 0.4);
   const cx = G.cx;
   storyOpen([
     `NIVEL 3 · EL MAIZAL\n\nDespiertas junto a la Azulita, volcada entre el maíz. A unos metros, la nave arde en llamas verdes. La escotilla está abierta, y adentro no hay nada.\n\nLa pistola de tu papá sigue en tu chaqueta. ${cx.wounded} está herido en alguna parte.`,
     "Lo que salió de la nave copia caras y voces, y escuchó todo lo que se dijo cerca de don Lucho. Pero no sabe cómo es cada uno de tus amigos: lo que no encaja, no es tu amigo.\n\nLa única salida está bajo la luz verde, al otro lado del maizal. Es justo a donde esa cosa quiere llevarte.\n\nJ: lo que sabes."
-  ], "Entrar al maizal ▶", () => { initAudio(); G.state = "play"; lockMouse(); });
+  ], "Entrar al maizal »", () => { initAudio(); G.state = "play"; lockMouse(); });
 }
 
 /* ---------- Inicio ---------- */
@@ -3602,13 +3634,14 @@ function startBar() {
   if (!BTEX.B) buildBarAssets();
   B = newBarState();
   hidePanels(); talkClose();
-  storyOpen(BAR_STORY, "Entrar al bar ▶", () => barTalk("intro"));
+  storyOpen(BAR_STORY, "Entrar al bar »", () => barTalk("intro"));
   barAudio(true);
 }
 
 /* ---------- Audio: zumbido del bar y estática de la radio ---------- */
-function barAudio(on) {                                // murmullo de la radio y el zumbido de los focos
-  if (!on) { sndStop("bar"); return; }
+function barAudio(on) {                                // murmullo de la radio, el zumbido de los focos y la rocola
+  if (!on) { sndStop("bar"); sndStop("barMusic"); return; }
+  sndMusic("barMusic", "bar_music", 0.55);
   sndLoop("bar", out => {
     const src = AC.createBufferSource(); src.buffer = noiseBuf(2); src.loop = true;
     const bp = AC.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2400; bp.Q.value = 0.8;
@@ -3649,11 +3682,20 @@ function barUpdate(dt) {
   if (mzOverlayTick(dt)) return;                         // una pantalla negra pausa el bar también
   B.t += dt;
   const barNodes = SND.loops.bar;
+  const l = B.npc.lucho, dl = Math.hypot(l.x - B.px, l.y - B.py), zone = zoneAt(B.px, B.py);
+  const talkingLucho = B.state === "talk" && B.talk && B.talk.id === "lucho" && typer.timer;
+  const nearLucho = (zone === "salon" ? clamp(1 - dl / 5, 0, 1) : 0) * 0.6 + (talkingLucho ? 0.4 : 0);   // 0..1: cuánto interfiere esa cosa
+  const jb = BAR_PROPS.find(p => p.img === "jukebox"), dj = Math.hypot(jb.x - B.px, jb.y - B.py);
   if (barNodes) {
-    const l = B.npc.lucho, dl = Math.hypot(l.x - B.px, l.y - B.py);
-    const talkingLucho = B.state === "talk" && B.talk && B.talk.id === "lucho" && typer.timer;
-    const target = (zoneAt(B.px, B.py) === "salon" ? 0.004 + 0.05 * clamp(1 - dl / 5, 0, 1) : 0.0) + (talkingLucho ? 0.05 : 0);
+    const target = (zone === "salon" ? 0.004 + 0.05 * clamp(1 - dl / 5, 0, 1) + 0.006 * clamp(1 - dj / 3, 0, 1) : 0.0) + (talkingLucho ? 0.05 : 0);
     barNodes.gain.gain.value += (target - barNodes.gain.gain.value) * Math.min(1, dt * 4);
+  }
+  {
+    let lvl = clamp(1.15 - dj / 7, 0.15, 1), cut = clamp(5200 - dj * 380, 1600, 5200);          // la rocola suena vieja: sin agudos
+    if (zone === "pasillo") { lvl *= 0.45; cut = 1100; }                                         // detrás de la pared
+    else if (zone === "patio") { lvl *= 0.3; cut = 650; }                                         // desde afuera, apenas el bajo
+    const wob = nearLucho > 0.05 ? 0.75 + 0.25 * Math.sin(B.t * 23) * Math.sin(B.t * 7.1) : 1;  // la canción se corta y vuelve
+    sndMusicSet("barMusic", lvl * (1 - 0.55 * nearLucho) * wob, cut * (1 - 0.6 * nearLucho));
   }
   if (B.costFx) { B.costFx.t -= dt; if (B.costFx.t <= 0) B.costFx = null; }
   fpTurnTick(B, dt);
@@ -3716,11 +3758,11 @@ function barRender() {
 }
 function barHud() {
   const left = BAR_LIMIT - B.min;
-  hudPanel([{ t: clockText(), c: left <= 8 ? "#ff9a8a" : "#fff1a6" }, { t: `Paul se va a las 00:00 (${left} min)`, c: "#a8bdd9", f: "12px" }], 250);
+  hudPanel([{ t: clockText(), c: left <= 8 ? UI.danger : UI.gold }, { t: `Paul se va a las 00:00 (${left} min)` }]);
   if (B.costFx) {                                       // los minutos que costó lo último que dijiste
     const a = clamp(B.costFx.t / 1.6, 0, 1);
-    ctx.font = `bold 14px ${HUD_FONT}`; ctx.textBaseline = "middle";
-    ctx.fillStyle = `rgba(255,150,130,${a.toFixed(2)})`; ctx.fillText(`−${B.costFx.n} min`, 82, 24 - (1 - a) * 8);
+    ctx.font = uiPixel(); ctx.textBaseline = "middle";
+    ctx.fillStyle = `rgba(255,91,104,${a.toFixed(2)})`; ctx.fillText(`−${B.costFx.n} MIN`, 76, 21 - (1 - a) * 8);
     ctx.textBaseline = "alphabetic";
   }
   if (B.state !== "play") return;
@@ -3771,7 +3813,7 @@ function setPause(on) {
   $("pause").classList.toggle("hidden", !on);
   if (on) releaseMouse();
   try { if (AC) { if (on) AC.suspend(); else AC.resume(); } } catch (e) { /* sin audio */ }
-  try { if (VOICE.ok) { if (on) speechSynthesis.pause(); else speechSynthesis.resume(); } } catch (e) { /* sin voz */ }
+  sndMusicPause(on);
 }
 // Escape abre la pausa solo mientras caminas (en un diálogo sirve para salir de él); P, siempre
 const inPlay = () => !!fpActive();

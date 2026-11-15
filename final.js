@@ -90,7 +90,7 @@ function fnBaseTrust(k) {                            // lo que quedó entre uste
 const DEFAULT_FINAL_BAR = () => ({ keysBy: "paul", told: [], secrets: { paul: { overheard: false }, sebas: { overheard: true }, stalin: { overheard: false } },
   flags: { paulMended: true, samiraOpen: true, clue_poster: true, clue_oldNoEat: true } });
 function startFinal(from) {
-  initAudio(); mzOverlayClear(); talkClose(); hidePanels(); sndStopAll(); hush();
+  initAudio(); mzOverlayClear(); talkClose(); hidePanels(); sndStopAll();
   if (!BAR_RESULT) BAR_RESULT = DEFAULT_FINAL_BAR();
   MODE = "final";
   const R = BAR_RESULT, cx = mzContext();
@@ -116,7 +116,7 @@ function startFinal(from) {
     "NIVEL 4 · LA LUZ\n\nSales del maíz solo. Nadie más llegó hasta aquí.\n\nLa luz verde baja despacio sobre un claro junto a la vía vieja.",
     "Cuando se apaga, alguien te espera en el centro. Tiene tu cara.\n\nNo queda nadie que pueda decir cuál de los dos es Pepe."
   ];
-  storyOpen(pages, "Salir del maíz ▶", party.length ? fnOpening : fnSolo);
+  storyOpen(pages, "Salir del maíz »", party.length ? fnOpening : fnSolo);
 }
 function fnHolder() {                                  // quién se queda con la pistola
   return ["Paul", "Samira", "Stalin", "Sebas"].find(n => FN.alive.includes(n));
@@ -308,7 +308,7 @@ function fnCrew(withDouble) {
   return [withDouble ? fnFlicker : BSPR.pepe].concat(FN.alive.map(img));
 }
 function fnEnding(kind) {
-  FN.anim = null; FN.flash = 0; talkClose(); sndStopAll(); hush(); mzOverlayClear();
+  FN.anim = null; FN.flash = 0; talkClose(); sndStopAll(); mzOverlayClear();
   FN.state = "epilogue";
   FN.cine = { t: 0, dur: 9, kind, crew: kind === "bad" ? fnCrew(true) : kind === "solobad" ? [fnFlicker] : fnCrew(false) };
   if (kind === "good" || kind === "bitter" || kind === "lonely") chime();
@@ -447,7 +447,7 @@ function finalRender() {
 }
 function fnHud() {
   if (!FN.alive.length) return;
-  hudPanel([{ t: "¿QUIÉN ES PEPE?", c: "#b9f66d" }, { t: `Ya preguntaron: ${FN.asked.size}/${FN.alive.length}`, c: "#a8bdd9", f: "12px" }], 230);
+  hudPanel([{ t: "¿QUIÉN ES PEPE?", c: UI.acc }, { t: `Ya preguntaron: ${FN.asked.size} de ${FN.alive.length}` }]);
   if (FN.state !== "play") return;
   hudCorner("[J] lo que sabes");
   const k = fnTarget();
