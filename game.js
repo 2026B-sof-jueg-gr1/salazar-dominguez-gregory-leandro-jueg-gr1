@@ -883,7 +883,7 @@ function cheatEnding(kind) {
   setPause(false);
   if (MODE !== "final" || !FN) startLevel(4);
   STORYP = null; hidePanels(); talkClose();
-  FN.anim = null; FN.opts = null; FN.talkT = null;
+  FN.anim = null; FN.opts = null; FN.clockOn = false;
   fnEnding(kind);
 }
 let AC = null;
@@ -1023,6 +1023,13 @@ const chime = sndSafe(() => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => s
 const growl = sndSafe(() => {                           // gruñido grave que se hunde
   const lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 600; lp.connect(SND.sfx);
   sndTone("sawtooth", 140, 38, AC.currentTime, 1.0, 0.35, lp, 0.05);
+});
+// Un paso pesado entre el maíz: un golpe grave y el crujido de las hojas. k: 0 lejos, 1 encima
+const alienStep = sndSafe((k, pan) => {
+  const t = AC.currentTime, p = pan * (1 - 0.4 * k);
+  sndNoise(t, 0.14, x => Math.pow(1 - x, 3), "lowpass", 260 + 260 * k, 0, sndGain(0.12 + 1.25 * k * k, "sfx", p));
+  sndNoise(t + 0.015, 0.09, x => Math.pow(1 - x, 4), "bandpass", 2200, 1.1, sndGain(0.04 + 0.4 * k * k, "sfx", p));
+  if (k > 0.6) thump(0.15 + 0.35 * (k - 0.6) / 0.4);
 });
 function heartbeat(d) { thump(0.25 + 0.3 * d); setTimeout(() => thump(0.18 + 0.25 * d), 170); }
 
@@ -1210,26 +1217,44 @@ function toast(msg, kind, title, delay) {
   return mzBand(msg, kind);
 }
 
-// El reloj de la conversación: grande, sobre el diálogo; mientras menos queda, más late y tiembla
-let mzTimerShown = null;
-function mzTimerUpdate() {
-  const el = $("mzTimer");
-  if (!el) return;
-  const fin = MODE === "final" && FN && FN.state === "dialog" && FN.talkT != null;
-  const on = fin || (MODE === "maizal" && G && G.state === "dialog" && G.talkT != null);
-  if (!on) { if (mzTimerShown !== null) { el.classList.add("hidden"); mzTimerShown = null; } return; }
-  const T = fin ? FN.talkT : G.talkT;
-  const lbl = fin ? "te están mirando" : G.party.includes("Sebas") ? "Sebas dispara en" : "esa cosa llega en";
-  const s = Math.max(0, Math.ceil(T)), key = s + lbl;
-  const talk = $("talk"); el.style.bottom = (talk.offsetHeight + 6) + "px";
-  el.style.setProperty("--p", clamp(T / 15, 0, 1).toFixed(3));
-  if (key === mzTimerShown) return;
-  if (mzTimerShown !== null && s <= 5 && s > 0) tick(s);
-  mzTimerShown = key;
-  el.classList.remove("hidden");
-  el.className = s <= 4 ? "danger" : s <= 8 ? "warn" : "calm";
-  $("mzTimerNum").textContent = s;
-  $("mzTimerLbl").textContent = lbl;
+// El reloj: uno solo para el bar, el maizal y el final, arriba a la izquierda. Solo cambian el texto y el número.
+// Cada opción que cuesta tiempo lo sacude, suena un tic y muestra lo que se llevó (clockSpend).
+const MZ_TALK_T = 45;                                    // segundos para decidir en el maizal
+let clockKey = null;
+function clockState() {
+  if (MODE === "bar" && B && (B.state === "play" || B.state === "talk")) {
+    const n = Math.max(0, BAR_LIMIT - B.min);
+    return { lbl: "Paul se va en", n, sub: n === 1 ? "minuto" : "minutos", p: n / BAR_LIMIT, warn: 10, danger: 5, top: 14 };
+  }
+  if (MODE === "maizal" && G && G.state === "dialog" && G.talkT != null) {
+    const n = Math.max(0, Math.ceil(G.talkT));
+    return { lbl: G.party.includes("Sebas") ? "Sebas dispara en" : "esa cosa llega en", n, sub: n === 1 ? "segundo" : "segundos",
+      p: G.talkT / MZ_TALK_T, warn: 12, danger: 5, top: Math.round((UI.m + 28) * cv.clientWidth / W) + 14, tick: true };   // debajo de los íconos de tus amigos
+  }
+  if (MODE === "final" && FN && FN.clockOn && !FN.cine) {
+    const n = Math.max(0, Math.ceil(FN.clock));
+    return { lbl: `${FN.holder} dispara en`, n, sub: n === 1 ? "segundo" : "segundos", p: FN.clock / FN_CLOCK, warn: 20, danger: 10, top: 14, tick: true };
+  }
+  return null;
+}
+function clockUpdate() {
+  const el = $("clock"); if (!el) return;
+  const c = clockState();
+  if (!c) { if (clockKey !== null) { el.classList.add("hidden"); clockKey = null; } return; }
+  el.style.setProperty("--p", clamp(c.p, 0, 1).toFixed(3));
+  const key = c.lbl + c.n + "@" + c.top;
+  if (key === clockKey) return;
+  if (c.tick && clockKey !== null && c.n <= 5 && c.n > 0) tick(c.n);
+  clockKey = key;
+  el.classList.remove("hidden"); el.style.top = c.top + "px";
+  el.classList.toggle("warn", c.n <= c.warn && c.n > c.danger); el.classList.toggle("danger", c.n <= c.danger);
+  $("clockNum").textContent = c.n; $("clockLbl").textContent = c.lbl; $("clockSub").textContent = c.sub;
+}
+function clockSpend(txt) {
+  const el = $("clock"), c = $("clockCost"); if (!el) return;
+  c.textContent = txt; c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop");
+  el.classList.remove("spend"); void el.offsetWidth; el.classList.add("spend");
+  tick(el.classList.contains("danger") ? 2 : 9);
 }
 const tick = sndSafe(sec => {                           // el reloj suena en los últimos segundos
   sndTone("square", sec <= 2 ? 1400 : 1000, 0, AC.currentTime, 0.06, 0.05, SND.sfx, 0.002);
@@ -1268,7 +1293,7 @@ function toMenu() {
 function startEncounter(e) {
   G.state = "dialog"; G.cur = e; G.talkOpts = [];
   fpFaceTo(G, e.x, e.y);
-  G.talkT = e.mercy ? null : 15;                           // quince segundos: después, ya no hay conversación
+  G.talkT = e.mercy ? null : MZ_TALK_T;                    // después, ya no hay conversación
   talkOpen(e.name);
   if (e.mercy) {                                           // lo alcanzó el alien: te pide que acabes con él
     typeLines([[e.name, "P-Pepe… me alcanzó. Siento algo moviéndose adentro… me está cambiando."], [e.name, "Hazlo. Por favor. Antes de que deje de ser yo."]], () => {
@@ -1284,14 +1309,14 @@ function startEncounter(e) {
   if (comp) lines.push([comp, mzOpinion(comp, e, G.cx)]);
   typeLines(lines, () => mzOptions(e));
 }
-// Las opciones nunca cambian de lugar: las preguntas hechas quedan apagadas y "Acabar" siempre es la última.
+// Como en el bar: lo que ya preguntaste desaparece de la lista, y "Acabar" siempre es la última.
 // Además, recién aparecidas no responden un instante, para que un clic de "continuar" no dispare nada.
 function showOpts() {
   drawOptButtons(G.talkOpts, mzChoose, o => o.cost ? `−${o.cost} s` : "");
   G.optT = performance.now();
 }
 function mzOptions(e) {
-  G.talkOpts = e.qs.map((q, i) => ({ tag: q.private ? "Privado" : "Preguntar", t: q.label, q: i, cost: 2, used: e.asked.has(q.id) }));
+  G.talkOpts = e.qs.map((q, i) => ({ tag: q.private ? "Privado" : "Preguntar", t: q.label, q: i, cost: 2 })).filter(o => !e.asked.has(e.qs[o.q].id));
   G.talkOpts.push({ tag: "Confiar", t: "Ven conmigo.", spare: true });
   G.talkOpts.push({ tag: "Acabar", hard: true, t: `Tú no eres ${e.name}.`, kill: true });
   showOpts();
@@ -1313,6 +1338,7 @@ function mzChoose(i) {
   const q = e.qs[o.q];
   e.asked.add(q.id);
   G.talkT = Math.max(0.5, G.talkT - o.cost);                 // cada pregunta gasta tiempo
+  clockSpend(`−${o.cost} s`);
   G.talkLog.push({ who: "Tú", text: o.t });
   let line;
   if (q.private) line = (!e.impostor || q.overheard) ? q.real : q.fake;    // el alien solo sabe lo que oyó don Lucho
@@ -1763,7 +1789,6 @@ function updateCine(dt) {
 }
 
 function update(dt) {
-  mzTimerUpdate();
   if (MODE === "maizal" && G.state !== "menu" && mzOverlayTick(dt)) return;   // una pantalla negra pausa el juego
   if (G.cine && (G.state === "cutscene" || G.state === "end")) { updateCine(dt); return; }
   if (G.state !== "menu") fpTurnTick(G, dt);             // gira hacia quien te habla (o hacia el que huye)
@@ -1801,6 +1826,12 @@ function update(dt) {
     else { endGame(false, "¡TE ATRAPÓ!", "El alien te encontró entre las plantas."); return; }
   }
 
+  G.stepT = (G.stepT || 0) - dt;                         // sus pasos: de su lado, más fuertes y seguidos mientras más cerca
+  if (ad < 9 && G.stepT <= 0) {
+    const k = 1 - ad / 9;
+    G.stepT = 0.62 - 0.24 * k;
+    alienStep(k, Math.sin(normAngle(Math.atan2(G.ay - G.py, G.ax - G.px) - G.ang)));
+  }
   const danger = clamp(1 - ad / 6, 0, 1);
   G.beat -= dt;
   if (danger > 0.05 && G.beat <= 0) { heartbeat(danger); G.beat = 1.1 - 0.8 * danger; }
@@ -2266,6 +2297,14 @@ function drawHud() {
     ctx.restore();
     if (lost) { ctx.strokeStyle = UI.danger; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 6, y + 6); ctx.lineTo(x + S - 6, y + S - 6); ctx.moveTo(x + S - 6, y + 6); ctx.lineTo(x + 6, y + S - 6); ctx.stroke(); }
   });
+  if (G.state === "play") {                              // durante un diálogo, en su lugar va el reloj
+    const n = G.party.length, x = UI.m + FRIENDS.length * 34 + 6, y = UI.m + 14;
+    ctx.font = uiText(15, 700); ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const t = `Amigos salvados: ${n}/${FRIENDS.length}`, w = Math.ceil(ctx.measureText(t).width) + 20;
+    uiBox(x, UI.m, w, 28, n ? UI.acc : UI.line);
+    ctx.fillStyle = n ? UI.acc : UI.fg; ctx.fillText(t, x + 10, y + 1);
+    ctx.textBaseline = "alphabetic";
+  }
   if (G.state !== "play") return;
   hudCorner("[J] lo que sabes · [M] mapa", G.showMap ? ROWS * 5 + 40 : 22);   // debajo del minimapa
   hudMouseHint();
@@ -2718,8 +2757,18 @@ function personSprite(o) {
     if (o.apron) { R(jk, 9, 15, 14, 16); R("#cfc7b0", 11, 19, 10, 13); R("#a8a08a", 11, 30, 10, 2); }
     else { R(jk, 9, 15, 14, 16); R(jkD, 20, 15, 3, 16); R(jkL, 10, 16, 2, 12); R(jkD, 9, 29, 14, 2); }
     if (o.shirt) { R(o.shirt, 14, 15, 4, 12); R(tone(o.shirt, -0.3), 17, 15, 1, 12); }
-    R(jk, 6, 16, 3, 13); R(jk, 23, 16, 3, 13); R(jkD, 25, 16, 1, 13); R(jkL, 6, 16, 1, 9);
-    R(sk, 6, 29, 3, 3); R(sk, 23, 29, 3, 3); R(skD, 8, 30, 1, 2); R(skD, 25, 30, 1, 2);
+    const gun = "#16161a", gunL = "#3a3a42";
+    if (o.aim === "side") {                                                   // apunta a su derecha, con las dos manos
+      R(jk, 9, 17, 14, 3); R(jkD, 9, 19, 14, 1); R(jk, 22, 16, 6, 3); R(jkD, 22, 18, 6, 1);
+      R(sk, 27, 16, 2, 3); R(gun, 28, 14, 4, 2); R(gunL, 28, 14, 4, 1); R(gun, 28, 16, 1, 2);
+    } else if (o.aim === "you") {                                             // te apunta a ti: el cañón de frente
+      R(jk, 6, 16, 3, 7); R(jk, 23, 16, 3, 7); R(jkD, 25, 16, 1, 7);
+      R(jk, 8, 21, 6, 3); R(jk, 18, 21, 6, 3); R(jkD, 8, 23, 16, 1);
+      R(sk, 13, 20, 6, 3); R(gun, 13, 16, 6, 5); R(gunL, 13, 16, 6, 1); R("#000", 15, 17, 2, 2);
+    } else {
+      R(jk, 6, 16, 3, 13); R(jk, 23, 16, 3, 13); R(jkD, 25, 16, 1, 13); R(jkL, 6, 16, 1, 9);
+      R(sk, 6, 29, 3, 3); R(sk, 23, 29, 3, 3); R(skD, 8, 30, 1, 2); R(skD, 25, 30, 1, 2);
+    }
     if (o.poncho) {                                                           // poncho rojo desteñido
       const pc = o.poncho, pcD = tone(pc, -0.35);
       R(pc, 6, 14, 20, 18); R(pc, 5, 18, 22, 12); R(pcD, 21, 14, 6, 18); R(tone(pc, 0.12), 7, 15, 3, 10);
@@ -2731,6 +2780,7 @@ function personSprite(o) {
     R(skD, 13, 7, 2, 1); R(skD, 17, 7, 2, 1);
     R("#120d0a", 13, 8, 2, 1); R("#120d0a", 17, 8, 2, 1);
     R(skD, 15, 10, 2, 1); R(tone(sk, -0.4), 14, 12, 4, 1);
+    if (o.alienFace) { R("#000", 13, 7, 2, 2); R("#000", 17, 7, 2, 2); R("#000", 14, 11, 4, 2); }   // ojos y boca de esa cosa
     const st = o.style || "short";
     if (st === "short") { R(hr, 11, 2, 10, 4); R(hr, 11, 5, 1, 3); R(hr, 20, 5, 1, 2); R(hrL, 13, 2, 3, 1); }
     if (st === "long") { R(hr, 11, 2, 10, 4); R(hr, 10, 4, 2, 14); R(hr, 20, 4, 2, 14); R(hrL, 12, 2, 3, 1); }
@@ -2929,6 +2979,10 @@ function buildBarAssets() {
   BTEX.wood2 = texWood(true);
   try {
   for (const k in CHARS) if (CHARS[k].look) BSPR[k] = personSprite(CHARS[k].look);
+  for (const n of FRIENDS) for (const aim of ["side", "you"]) {                // el nivel 4: quien les apunta a los dos Pepes
+    const k = n.toLowerCase(); BSPR[k + "_" + aim] = personSprite({ ...CHARS[k].look, seated: false, aim });
+  }
+  BSPR.dobleAlien = personSprite({ ...CHARS.doble.look, alienFace: true });
   BSPR.table = tableSprite(); BSPR.stool = stoolSprite(); BSPR.jukebox = jukeboxSprite();
   BSPR.bulb = bulbSprite(); BSPR.plate = plateSprite(); BSPR.radio = radioSprite();
   BSPR.dog = dogSprite(); BSPR.plant = plantSprite(); BSPR.crates = cratesSprite(); BSPR.barrel = barrelSprite(); BSPR.bucket = bucketSprite();
@@ -3118,7 +3172,7 @@ function newBarState() {
     f: {},                       // banderas de la conversación
     secrets: {},                 // id → { overheard }
     told: [],                    // lo que le contaste a don Lucho
-    talk: null, barkT: 3, lastBark: {}, talkLog: [], faceTo: null, costFx: null, meteor: null
+    talk: null, barkT: 3, lastBark: {}, talkLog: [], faceTo: null, meteor: null
   };
 }
 const clockText = () => { const m = 30 + B.min; return m >= 60 ? `00:${String(m - 60).padStart(2, "0")}` : `23:${String(m).padStart(2, "0")}`; };
@@ -3595,7 +3649,7 @@ function barChoose(i) {
   if (!o) return;
   $("talkOpts").innerHTML = "";
   B.talk.opts = [];
-  if (o.cost) { B.min = Math.min(BAR_LIMIT, B.min + o.cost); B.costFx = { n: o.cost, t: 1.6 }; }
+  if (o.cost) { B.min = Math.min(BAR_LIMIT, B.min + o.cost); clockSpend(`−${o.cost} min`); }
   if (o.fx) o.fx();
   const go = () => { if (o.go) barNode(o.go); else barEndTalk(); };
   if (!o.tag) { go(); return; }
@@ -3687,8 +3741,8 @@ function startMaizalAfterChase() {
   sndMusic("mzMusic", "maizal_music", 0.4);
   const cx = G.cx;
   storyOpen([
-    `NIVEL 3 · EL MAIZAL\n\nDespiertas junto a la Azulita, volcada entre el maíz. A unos metros, la nave arde en llamas verdes. La escotilla está abierta, y adentro no hay nada.\n\nLa pistola de tu papá sigue en tu chaqueta. ${cx.wounded} está herido en alguna parte.`,
-    "Lo que salió de la nave copia caras y voces, y escuchó todo lo que se dijo cerca de don Lucho. Pero no sabe cómo es cada uno de tus amigos: lo que no encaja, no es tu amigo.\n\nLa única salida está bajo la luz verde, al otro lado del maizal. Es justo a donde esa cosa quiere llevarte.\n\nJ: lo que sabes."
+    `NIVEL 3 · EL MAIZAL\n\nDespiertas junto a la camioneta volcada. La nave arde a unos metros, vacía.\n\n${cx.wounded} está herido. Tienes la pistola de tu papá.`,
+    "Esa cosa copia caras y voces. Sabe lo que se dijo cerca de don Lucho, pero no cómo es cada uno.\n\nSi algo no encaja, no es tu amigo.\n\nLa salida está bajo la luz verde. J: lo que sabes."
   ], "Entrar al maizal »", () => { initAudio(); G.state = "play"; lockMouse(); });
 }
 
@@ -3766,7 +3820,6 @@ function barUpdate(dt) {
     const wob = nearLucho > 0.05 ? 0.75 + 0.25 * Math.sin(B.t * 23) * Math.sin(B.t * 7.1) : 1;  // la canción se corta y vuelve
     sndMusicSet("barMusic", lvl * (1 - 0.55 * nearLucho) * wob, cut * (1 - 0.6 * nearLucho));
   }
-  if (B.costFx) { B.costFx.t -= dt; if (B.costFx.t <= 0) B.costFx = null; }
   fpTurnTick(B, dt);
   if (B.state !== "play") return;
   fpWalk(B, dt, BAR_BODY, BAR_WORLD, barDiscs());
@@ -3826,14 +3879,6 @@ function barRender() {
   drawEcho(PAUSED ? 0 : 1 / 60);                        // encima de los subtítulos: la flecha no se tapa
 }
 function barHud() {
-  const left = BAR_LIMIT - B.min;
-  hudPanel([{ t: clockText(), c: left <= 8 ? UI.danger : UI.gold }, { t: `Paul se va a las 00:00 (${left} min)` }]);
-  if (B.costFx) {                                       // los minutos que costó lo último que dijiste
-    const a = clamp(B.costFx.t / 1.6, 0, 1);
-    ctx.font = uiPixel(); ctx.textBaseline = "middle";
-    ctx.fillStyle = `rgba(255,91,104,${a.toFixed(2)})`; ctx.fillText(`−${B.costFx.n} MIN`, 76, 21 - (1 - a) * 8);
-    ctx.textBaseline = "alphabetic";
-  }
   if (B.state !== "play") return;
   hudCorner("[J] lo que sabes");
   const t = barTarget();
@@ -3851,7 +3896,7 @@ function barKey(c) {
 }
 
 $("endNextBtn").addEventListener("click", () => { if (END.next) END.next(); });
-$("talkBox").addEventListener("click", () => { if (MODE === "bar" || MODE === "maizal") advanceTalk(); });
+$("talkBox").addEventListener("click", () => { if (MODE === "bar" || MODE === "maizal" || MODE === "final") advanceTalk(); });
 cv.addEventListener("click", () => { if (MODE === "chase") chaseKey("Enter"); });
 $("talkLog").addEventListener("click", () => toggleTalkLog());
 
@@ -3922,7 +3967,7 @@ function mzKey(c) {
 }
 window.addEventListener("mousemove", e => {
   const S = fpActive();
-  if (S && document.pointerLockElement === cv && !mzFrozen()) fpLook(S, e);
+  if (S && document.pointerLockElement === cv && !mzFrozen()) { if (MODE === "final") finalMouse(e); else fpLook(S, e); }
 });
 cv.addEventListener("click", () => { if ((MODE === "maizal" || MODE === "bar") && mzStoryKey()) return; if (fpActive()) lockMouse(); });
 window.addEventListener("keyup", e => { keys[e.code] = false; });
@@ -3953,6 +3998,7 @@ function frame(now) {
     else if (MODE === "chase") { if (!PAUSED) chaseUpdate(dt); chaseRender(); }
     else if (MODE === "final") { if (!PAUSED) finalUpdate(dt); finalRender(); }
     else { if (!PAUSED) update(dt); render(); }
+    clockUpdate();
   } catch (e) {
     showError(e.message + " · " + String(e.stack || "").split("\n").slice(1, 3).join(" ").trim());
     ctx.setTransform(1, 0, 0, 1, 0, 0);               // que un cuadro roto no deje el lienzo desplazado

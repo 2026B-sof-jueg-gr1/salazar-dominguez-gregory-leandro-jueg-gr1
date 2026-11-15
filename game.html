@@ -11,7 +11,6 @@
      * Los mismos valores viven en game.js (objeto UI) para lo que se dibuja en el lienzo.
      * ===================================================================== */
     @font-face { font-family: "Silkscreen"; src: url("fonts/silkscreen-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-    @font-face { font-family: "Silkscreen"; src: url("fonts/silkscreen-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
     @font-face { font-family: "Atkinson Hyperlegible"; src: url("fonts/atkinson-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
     @font-face { font-family: "Atkinson Hyperlegible"; src: url("fonts/atkinson-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
     @font-face { font-family: "Atkinson Hyperlegible"; src: url("fonts/atkinson-400-italic.woff2") format("woff2"); font-style: italic; font-display: swap; }
@@ -66,9 +65,9 @@
     .hidden { display: none !important; }
 
     /* ---------- Tipografía ---------- */
-    .t-display { font-family: var(--font-pixel); font-weight: 700; font-size: var(--fs-px-xl); line-height: 1.1; color: var(--acc); letter-spacing: .04em;
+    .t-display { font-family: var(--font-pixel); font-weight: 400; font-size: var(--fs-px-xl); line-height: 1.1; color: var(--acc); letter-spacing: .04em;
       text-shadow: 3px 3px 0 #10240f, 0 0 24px rgba(120, 220, 90, .45); }
-    .t-title { font-family: var(--font-pixel); font-weight: 700; font-size: var(--fs-px-lg); line-height: 1.4; color: var(--fg); letter-spacing: .06em; }
+    .t-title { font-family: var(--font-pixel); font-weight: 400; font-size: var(--fs-px-lg); line-height: 1.4; color: var(--fg); letter-spacing: .06em; }
     .t-label { font-family: var(--font-pixel); font-size: var(--fs-px-xs); line-height: 1.6; color: var(--fg-dim); letter-spacing: .08em; text-transform: uppercase; }
     .t-body { font-family: var(--font-text); font-size: var(--fs-tx-lg); line-height: 1.6; color: var(--fg); white-space: pre-line; }
     kbd { display: inline-block; font-family: var(--font-pixel); font-size: var(--fs-px-xs); line-height: 1; padding: 4px 5px;
@@ -181,7 +180,7 @@
     .opt .tag { grid-area: tag; font-family: var(--font-pixel); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-dim); }
     .opt .tag:empty { display: none; }
     .opt .t { grid-area: t; }
-    .opt .cost { grid-area: cost; font-family: var(--font-pixel); font-size: 10px; color: var(--fg-mute); white-space: nowrap; }
+    .opt .cost { grid-area: cost; font-family: var(--font-text); font-weight: 700; font-size: var(--fs-tx-sm); color: var(--warn); white-space: nowrap; }
     .opt.hard { border-color: #6a3a24; }
     .opt.leave { background: transparent; border-color: transparent; color: var(--fg-dim); }
     .opt.used { opacity: .3; cursor: default; transform: none !important; }
@@ -193,21 +192,31 @@
     @keyframes optIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     @keyframes nudge { 0%, 100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(3px); opacity: 1; } }
 
-    /* ---------- Reloj de decisión ---------- */
-    #mzTimer {
-      --p: 1; --c: var(--fg); position: absolute; right: 7%; bottom: 40%; z-index: 5; width: 76px; height: 76px;
-      border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;
+    /* ---------- Reloj: uno solo para todos los niveles (solo cambian el texto y el número) ---------- */
+    #clock {
+      --p: 1; --c: var(--fg); position: absolute; left: 2.5%; top: 14px; z-index: 5; width: 62px; height: 62px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center; pointer-events: none;
       background: radial-gradient(circle, rgba(5, 9, 16, .95) 58%, transparent 60%), conic-gradient(var(--c) calc(var(--p) * 360deg), rgba(255, 255, 255, .12) 0);
-      box-shadow: 0 0 18px rgba(0, 0, 0, .7); animation: tPulse 1.2s ease-in-out infinite;
+      box-shadow: 0 0 18px rgba(0, 0, 0, .7);
     }
-    #mzTimerNum { font-family: var(--font-pixel); font-weight: 700; font-size: 30px; color: var(--c); line-height: 1; }
-    #mzTimerLbl, #mzTimerSub { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;
-      font-family: var(--font-pixel); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--c);
-      padding: 4px 6px; background: var(--bg-panel); border: var(--bw) solid var(--line); }
-    #mzTimerLbl { bottom: calc(100% + 6px); }
-    #mzTimerSub { top: calc(100% + 6px); }
-    #mzTimer.warn { --c: var(--warn); animation: tPulse .65s ease-in-out infinite, tShake .3s linear infinite; }
-    #mzTimer.danger { --c: var(--danger); box-shadow: 0 0 26px rgba(255, 40, 60, .55); animation: tBeat .4s ease-in-out infinite, tShakeHard .12s linear infinite; }
+    .rt-num { font-family: var(--font-text); font-weight: 700; font-size: 22px; color: var(--c); line-height: 1; }
+    .rt-lbl, .rt-sub { position: absolute; left: calc(100% + 8px); white-space: nowrap;
+      font-family: var(--font-text); font-weight: 700; font-size: 12px; color: var(--c);
+      padding: 2px 8px; background: var(--bg-panel); border: var(--bw) solid var(--line); }
+    .rt-lbl { top: 6px; }
+    .rt-sub { bottom: 6px; }
+    #clock.warn { --c: var(--warn); animation: tPulse .65s ease-in-out infinite, tShake .3s linear infinite; }
+    #clock.danger { --c: var(--danger); box-shadow: 0 0 26px rgba(255, 40, 60, .55); animation: tBeat .4s ease-in-out infinite, tShakeHard .12s linear infinite; }
+    #clock.spend { animation: tSpend .55s ease-out; }
+    #clock.warn.spend, #clock.danger.spend { animation: tSpend .55s ease-out, tPulse .65s ease-in-out .55s infinite; }
+    #clock .rt-cost { left: calc(100% + 150px); }
+    .rt-cost { position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); white-space: nowrap; opacity: 0;
+      font-family: var(--font-text); font-weight: 700; font-size: 18px; color: var(--danger); text-shadow: 2px 2px 0 #000; }
+    .rt-cost.pop { animation: costPop 1.8s ease-out forwards; }
+    @keyframes tSpend { 0% { transform: scale(1); filter: brightness(1); } 20% { transform: scale(1.22) rotate(-8deg); filter: brightness(1.8); }
+      45% { transform: scale(.94) rotate(5deg); } 70% { transform: scale(1.05) rotate(-2deg); } 100% { transform: scale(1); filter: brightness(1); } }
+    @keyframes costPop { 0% { opacity: 0; transform: translate(-6px, -50%); } 12% { opacity: 1; transform: translate(0, -50%); }
+      70% { opacity: 1; transform: translate(0, -110%); } 100% { opacity: 0; transform: translate(0, -160%); } }
     @keyframes tPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
     @keyframes tBeat { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.18); } 55% { transform: scale(1.04); } }
     @keyframes tShake { 0%, 100% { translate: 0 0; } 25% { translate: -1px 1px; } 75% { translate: 1px -1px; } }
@@ -252,7 +261,7 @@
         <div id="talkFoot"></div>
       </div>
       <div id="talkLog" class="card hidden"></div>
-      <div id="mzTimer" class="hidden"><span id="mzTimerLbl">esa cosa llega en</span><span id="mzTimerNum">15</span><span id="mzTimerSub">segundos</span></div>
+      <div id="clock" class="hidden"><span id="clockLbl" class="rt-lbl"></span><span id="clockNum" class="rt-num"></span><span id="clockSub" class="rt-sub"></span><span id="clockCost" class="rt-cost"></span></div>
 
       <div id="diary" class="panel card hidden"></div>
 

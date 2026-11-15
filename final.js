@@ -27,9 +27,12 @@ const FN_RAW = [
   "FFF=====FFF"
 ];
 const FN_LIGHT = { x: 5.5, y: 3.6 };                 // donde baja la luz
-const FN_DOUBLE = { x: 5.5, y: 3.3 };                // el otro Pepe, justo debajo
-const FN_SPOT = { samira: [3.1, 5.3], sebas: [3.5, 3.5], stalin: [7.5, 3.5], paul: [7.9, 5.3] };
-const FN_BODY = { speed: 2.4, r: 0.2, bobRate: 8, bobAmp: 2 };
+const FN_DOUBLE = { x: 5.5, y: 3.4 };                // el otro Pepe, justo debajo
+const FN_ME = { x: 5.5, y: 6.4 };                    // tú: no te puedes mover, te están apuntando
+const FN_AIM = [3.5, 4.7];                           // quien tiene la pistola, a un lado de los dos
+const FN_SPOTS = [[7.6, 4.5], [8.2, 6.6], [2.8, 6.8]];  // los demás, alrededor
+const FN_CLOCK = 60;                                 // un minuto antes de que dispare
+const FN_BODY = { speed: 0, r: 0.2, bobRate: 8, bobAmp: 2 };
 const fnCell = (x, y) => (x < 0 || y < 0 || x >= FN_RAW[0].length || y >= FN_RAW.length) ? null : FN_RAW[y][x];
 // El mismo maíz, la misma tierra y la misma niebla del maizal; el suelo se pinta de verde bajo la luz
 const FN_WORLD = {
@@ -90,16 +93,25 @@ function fnBaseTrust(k) {                            // lo que quedó entre uste
 const DEFAULT_FINAL_BAR = () => ({ keysBy: "paul", told: [], secrets: { paul: { overheard: false }, sebas: { overheard: true }, stalin: { overheard: false } },
   flags: { paulMended: true, samiraOpen: true, clue_poster: true, clue_oldNoEat: true } });
 function startFinal(from) {
-  initAudio(); mzOverlayClear(); talkClose(); hidePanels(); sndStopAll();
+  initAudio(); mzOverlayClear(); talkClose(); hidePanels();
+  for (const k in SND.loops) if (k !== "mzMusic") sndStop(k);      // la música del maizal sigue sonando en el claro
+  sndMusic("mzMusic", "maizal_music", 0.4);
   if (!BAR_RESULT) BAR_RESULT = DEFAULT_FINAL_BAR();
   MODE = "final";
   const R = BAR_RESULT, cx = mzContext();
   const party = (from ? from.party : FRIENDS).filter(n => FRIENDS.includes(n));
-  FN = { state: "intro", px: 5.5, py: 8.4, ang: -Math.PI / 2, pitch: 0, bob: 0, faceTo: null, t: 0, meteor: null,
+  FN = { state: "intro", px: FN_ME.x, py: FN_ME.y, ang: -Math.PI / 2, pitch: 0, bob: 0, faceTo: null, t: 0, meteor: null,
+    clock: null, clockOn: false, holder: null, focus: 0, mouseX: 0, eyeT: rand(4, 5), eyeOn: 0, aimT: 0,
     R, cx, party, alive: party.slice(), lost: from ? from.lost.slice() : FRIENDS.filter(n => !party.includes(n)),
     npc: {}, trust: {}, asked: new Set(), talkLog: [], glow: 0.7, form: "pepe", dx: FN_DOUBLE.x, dy: FN_DOUBLE.y, dlift: 0,
-    talkT: null, opts: null, barkT: 9, afterT: null, anim: null, cine: null, fall: 0, flash: 0, stalinLeft: false };
-  for (const n of party) { const k = n.toLowerCase(); FN.npc[k] = { x: FN_SPOT[k][0], y: FN_SPOT[k][1] }; FN.trust[k] = fnBaseTrust(k); }
+    opts: null, barkT: 9, afterT: null, anim: null, cine: null, fall: 0, flash: 0, stalinLeft: false };
+  FN.holder = fnHolder() || null;
+  let si = 0;
+  for (const n of party) {
+    const k = n.toLowerCase(), p = n === FN.holder ? FN_AIM : FN_SPOTS[si++];
+    FN.npc[k] = { x: p[0], y: p[1] }; FN.trust[k] = fnBaseTrust(k);
+  }
+  FN.focus = fnPoints().findIndex(p => p.k === "doble");
   drone();
   sndLoop("final", out => {                          // el zumbido de la nave, encima del claro
     const o = AC.createOscillator(), lfo = AC.createOscillator(), lg = AC.createGain(), g = AC.createGain();
@@ -111,33 +123,61 @@ function startFinal(from) {
   const pages = party.length ? [
     `NIVEL 4 · LA LUZ\n\nSalen del maíz a un claro junto a la vía vieja. ${list} ${party.length > 1 ? "vienen" : "viene"} contigo.\n\nLa luz verde baja despacio sobre el claro. Zumba. El aire huele a quemado.`,
     "Cuando la luz se apaga, hay alguien más parado en el centro.\n\nTiene tu chaqueta. Tu cara. Tu forma de pararte.\n\nEs Pepe. Y tú también.",
-    "Tus amigos los van a interrogar a los dos. Esa cosa escuchó todo lo que se dijo cerca de don Lucho, y lo repite palabra por palabra.\n\nSolo te salva lo que nunca se dijo en voz alta.\n\nAcércate a cada uno y habla con [E]. J: lo que sabes."
+    `${fnHolder()} les apunta a los dos. Tienen un minuto.\n\nNo puedes moverte. Gira con A/D, las flechas o el mouse, y deja que cada amigo te pregunte con [E].\n\nEsa cosa repite lo que oyó palabra por palabra. Solo te salva lo que nunca se dijo en voz alta.`
   ] : [
     "NIVEL 4 · LA LUZ\n\nSales del maíz solo. Nadie más llegó hasta aquí.\n\nLa luz verde baja despacio sobre un claro junto a la vía vieja.",
     "Cuando se apaga, alguien te espera en el centro. Tiene tu cara.\n\nNo queda nadie que pueda decir cuál de los dos es Pepe."
   ];
   storyOpen(pages, "Salir del maíz »", party.length ? fnOpening : fnSolo);
 }
-function fnHolder() {                                  // quién se queda con la pistola
-  return ["Paul", "Samira", "Stalin", "Sebas"].find(n => FN.alive.includes(n));
+function fnHolder() {                                  // quién les apunta: Samira, y si no llegó, el siguiente
+  return ["Samira", "Paul", "Stalin", "Sebas"].find(n => FN.alive.includes(n));
 }
+// Los puntos a los que puedes mirar: el otro Pepe y cada amigo, de izquierda a derecha
+function fnPoints() {
+  const pts = [{ k: "doble", x: FN.dx, y: FN.dy }].concat(FN.alive.map(n => { const k = n.toLowerCase(); return { k, x: FN.npc[k].x, y: FN.npc[k].y }; }));
+  for (const p of pts) p.a = normAngle(Math.atan2(p.y - FN_ME.y, p.x - FN_ME.x) + Math.PI / 2);
+  return pts.sort((a, b) => a.a - b.a);
+}
+function fnLook(step) {                                // gira al punto de al lado (no da la vuelta entera)
+  const pts = fnPoints(), cur = pts[FN.focus] ? FN.focus : 0;
+  FN.focus = clamp(cur + step, 0, pts.length - 1);
+  const p = pts[FN.focus]; fpFaceTo(FN, p.x, p.y);
+}
+function finalMouse(e) {                               // el mouse también salta de un punto a otro
+  FN.mouseX += clamp(e.movementX || 0, -120, 120);
+  if (Math.abs(FN.mouseX) > 70) { fnLook(Math.sign(FN.mouseX)); FN.mouseX = 0; }
+}
+const fnSettled = () => FN.faceTo == null || Math.abs(normAngle(FN.faceTo - FN.ang)) < 0.15;   // ya casi llegó a mirarlo
+const fnFocusKey = () => { const p = fnPoints()[FN.focus]; return p && p.k !== "doble" ? p.k : null; };
 
 /* ---------- Diálogo del final: el mismo recuadro, con tiempo para responder ---------- */
 function fnTalk(lines, then) { FN.state = "dialog"; typeLines(lines, then, true); }
-function fnOptions(opts, onPick, onTimeout) {
+function fnOptions(opts, onPick) {
   FN.opts = opts; FN.onPick = onPick;
-  FN.onTimeout = () => { $("talkOpts").innerHTML = ""; FN.opts = null; onTimeout(); };
   drawOptButtons(opts, fnChoose, () => "");
-  FN.optT = performance.now(); FN.talkT = 15;
+  FN.optT = performance.now();
+}
+// Se acabó el minuto: con lo que alcanzó a oír, dispara
+function fnTimeUp() {
+  FN.clockOn = false; FN.clock = 0; FN.opts = null; FN.afterT = null; FN.cur = null;
+  $("talkOpts").innerHTML = ""; $("diary").classList.add("hidden");
+  const H = FN.holder;
+  talkOpen(H);
+  fnTalk([["", "(Se acabó el tiempo.)"], [H, H === "Sebas" ? "Y-ya no hay tiempo… ya no…" : "¡Ya! ¡Se acabó el tiempo!"]], () => fnResolve(null, true));
 }
 function fnChoose(i) {
   if (MODE !== "final" || !FN || FN.state !== "dialog" || typerBusy() || !FN.opts) return;
   if (performance.now() - FN.optT < 450) return;          // un clic de más no elige por ti
   const o = FN.opts[i]; if (!o) return;
-  FN.opts = null; FN.talkT = null; $("talkOpts").innerHTML = "";
+  FN.opts = null; $("talkOpts").innerHTML = "";
   FN.onPick(o);
 }
-function fnToPlay() { talkClose(); FN.state = "play"; FN.talkT = null; lockMouse(); }
+function fnToPlay() {
+  talkClose(); FN.state = "play"; lockMouse();
+  if (FN.clock == null) { FN.clock = FN_CLOCK; FN.clockOn = true; }      // el minuto empieza cuando termina la presentación
+  const p = fnPoints()[FN.focus]; if (p) fpFaceTo(FN, p.x, p.y);         // vuelves a mirar al que tenías enfrente
+}
 
 function fnOpening() {
   const H = fnHolder(), has = n => FN.alive.includes(n);
@@ -147,8 +187,8 @@ function fnOpening() {
     ["", "(La luz se apaga de golpe. En el centro del claro hay otro Pepe. Te mira con tus propios ojos.)"],
     ["El otro Pepe", "¡Esa cosa tiene mi cara! ¡No le crean! ¡Es el alien!"],
     [H, H === "Paul" ? "¡Quietos los dos! …Hic. Nadie se mueve." : H === "Samira" ? "¡Quietos! ¿Me oyeron? ¡Los dos!" : H === "Stalin" ? "Quietos… es lo mismo que le pasó a mi papá. Quietos." : "Q-quietos… creo… ¡quietos!"],
-    ["", `(${H} les saca la pistola de la chaqueta a los dos. Pesan igual. Son la misma pistola.)`],
-    [H, "Nadie dispara hasta saber quién es quién. Les vamos a preguntar cosas. Cosas de verdad."]
+    ["", `(${H} les quita la pistola a los dos. Pesan igual. Con una les apunta, primero a ti y después al otro.)`],
+    [H, "Nadie se mueve. Les vamos a preguntar cosas de verdad. Tienen un minuto. Después, disparo."]
   ];
   if (has("Sebas") && H !== "Sebas") lines.push(["Sebas", "C-creo que es el de la izquierda… ¿o el otro? No sé, ñaño, son iguales."]);
   fnTalk(lines, fnToPlay);
@@ -158,12 +198,12 @@ function fnOpening() {
 function fnRound(k) {
   const Q = FN_Q[k], name = fnName(k), dk = fnAlienKnows(k);
   FN.cur = k; FN.asked.add(k);
-  talkOpen(name); fpFaceTo(FN, FN.npc[k].x, FN.npc[k].y);
+  talkOpen(name);
   const ans = fnAlienExact(k) ? Q.heard : dk ? Q.bluff : Q.bluff;
   fnTalk([[name, Q.q], ["El otro Pepe", ans], ["", fnAlienExact(k) ? "(Lo dice sin pensar. Palabra por palabra, como se dijo en el bar.)" : "(Lo dice sin dudar ni un segundo.)"]], () => {
     const opts = [fnPepeKnows(k) ? { t: Q.lived, kind: "lived" } : { t: "No lo sé. Nunca me lo contaste… y es mi culpa: nunca pregunté.", kind: "honest" },
       { t: Q.pub, kind: "pub" }, { t: Q.guess, kind: "guess" }];
-    fnOptions(shuffle(opts), o => fnAnswer(k, o.kind, o.t), () => fnAnswer(k, "timeout"));
+    fnOptions(shuffle(opts), o => fnAnswer(k, o.kind, o.t));
   });
 }
 // Cuánto les acerca a ti cada respuesta (frente a lo que dijo el otro)
@@ -187,18 +227,18 @@ function fnToldRound(k) {
   fnTalk([["El otro Pepe", `Y otra cosa, ${name}. Yo le conté a ese viejo lo tuyo. Lo oíste en la radio, con mi voz. Perdón.`]], () =>
     fnOptions(shuffle([{ t: "Fui yo. Perdón. No sabía quién era ese viejo.", kind: "confess" }, { t: "Yo no fui. Fue él. Tiene mi cara, ¿no ves?", kind: "deny" }]),
       o => { if (o.kind === "deny") FN.trust[k] -= 2;
-        fnTalk([["Tú", o.t], [name, o.kind === "deny" ? "Era tu voz en la radio, Pepe. Tu voz. …Él por lo menos lo admite." : "…Los dos dicen que fueron. Claro. Los dos."]], fnEndRound); },
-      () => { FN.trust[k] -= 1; fnTalk([["", "(No dices nada.)"], [name, "¿Nada? …Él por lo menos pidió perdón."]], fnEndRound); }));
+        fnTalk([["Tú", o.t], [name, o.kind === "deny" ? "Era tu voz en la radio, Pepe. Tu voz. …Él por lo menos lo admite." : "…Los dos dicen que fueron. Claro. Los dos."]], fnEndRound); }));
 }
 function fnEndRound() {
   fnToPlay(); FN.cur = null;
-  if (FN.alive.every(n => FN.asked.has(n.toLowerCase()))) FN.afterT = 1.2;
+  if (FN.alive.every(n => FN.asked.has(n.toLowerCase()))) { FN.afterT = 1.2; FN.clockOn = false; }   // ya preguntaron todos: el reloj se detiene
 }
 
 /* ---------- Stalin y su papá ---------- */
 function fnAfterRounds() {
   const H = fnHolder();
   talkOpen(H);
+  fpFaceTo(FN, FN.npc[H.toLowerCase()].x, FN.npc[H.toLowerCase()].y);
   fnTalk([[H, H === "Sebas" ? "Ya… ya, ya. Basta. C-creo que ya sé." : "Ya. Basta. Ya sé."]], () => (FN.alive.includes("Stalin") && !FN.stalinDone) ? fnStalin() : fnVerdict());
 }
 function fnStalin() {
@@ -217,7 +257,7 @@ function fnStalin() {
     fnOptions(opts, o => {
       const t = FN.trust.stalin, stays = o.kind === "clues" || (o.kind === "gorro" && t >= 0) || (o.kind === "warm" && t >= 1);
       fnTalk([["Tú", o.t]], () => stays ? fnStalinStays() : fnStalinGoes());
-    }, fnStalinGoes);
+    });
   });
 }
 function fnStalinStays() {
@@ -238,8 +278,8 @@ function fnStalinGoes() {
 
 /* ---------- El veredicto: quien tiene la pistola elige ---------- */
 function fnVerdict() {
-  const H = fnHolder();
-  talkOpen(H);
+  const H = FN.holder;
+  talkOpen(H); fpFaceTo(FN, FN.npc[H.toLowerCase()].x, FN.npc[H.toLowerCase()].y);
   fnTalk([
     ["", `(${H} levanta la pistola. Te apunta a ti. Después al otro. Le tiembla la mano.)`],
     ["El otro Pepe", `${H}… soy yo. Mírame bien. Soy yo.`]
@@ -247,15 +287,16 @@ function fnVerdict() {
     { t: `${H}, soy yo.`, kind: "plea" },
     { t: "(No decir nada. Mirarlo a los ojos.)", kind: "look" },
     { t: "Si tienes que dispararme, hazlo. Pero sálvalos a ellos.", kind: "sacrifice" }    // esa cosa nunca se ofrece
-  ], o => fnResolve(o), () => fnResolve(null)));
+  ], o => fnResolve(o)));
 }
-function fnResolve(o) {
-  const H = fnHolder(), hk = H.toLowerCase();
+function fnResolve(o, late) {
+  FN.clockOn = false;
+  const H = FN.holder, hk = H.toLowerCase();
   const S = FN.alive.reduce((s, n) => s + FN.trust[n.toLowerCase()], 0) + (o && o.kind === "sacrifice" ? 1 : 0);
   const you = S > 0 || (S === 0 && FN.trust[hk] > 0);    // en un empate, la duda favorece al que nunca duda
   const right = { Paul: "El de verdad duda, Pepe. Siempre dudaste. Hasta para ir a un funeral.", Samira: "Tú te equivocas. Él nunca se equivoca. Eso no es humano.",
     Sebas: "C-creo que… no. No creo. Sé. Es él.", Stalin: "Mi papá también dudaba. Esa cosa nunca." }[H];
-  const lines = o ? [["Tú", o.t]] : [["", "(No te sale la voz.)"]];
+  const lines = o ? [["Tú", o.t]] : late ? [] : [["", "(No te sale la voz.)"]];
   if (you) fnTalk(lines.concat([["", `(${H} gira la pistola hacia el otro Pepe.)`], [H, right]]), () => { talkClose(); FN.anim = { kind: "double", t: 0 }; gunshot(); });
   else fnTalk(lines.concat([["", `(${H} te apunta a ti. Tiene los ojos llenos de lágrimas.)`], [H, "Perdón… si eres tú… perdón."]]), () => { talkClose(); FN.anim = { kind: "you", t: 0 }; gunshot(); });
 }
@@ -268,8 +309,7 @@ function fnSolo() {
     ["El otro Pepe", "Nadie va a notar la diferencia, Pepe. Yo vuelvo a casa por ti. Tu mamá ni se va a dar cuenta."],
     ["", "(Todavía tienes la pistola de tu papá en la chaqueta.)"]
   ], () => fnOptions([{ t: "Dispararle.", kind: "shoot", hard: true }, { t: "Bajar el arma.", kind: "lower" }],
-    o => { talkClose(); FN.anim = { kind: o.kind === "shoot" ? "solo" : "solobad", t: 0 }; if (o.kind === "shoot") gunshot(); },
-    () => { talkClose(); FN.anim = { kind: "solobad", t: 0 }; }));
+    o => { talkClose(); FN.anim = { kind: o.kind === "shoot" ? "solo" : "solobad", t: 0 }; if (o.kind === "shoot") gunshot(); }));
 }
 
 /* ---------- Animaciones del desenlace ---------- */
@@ -337,31 +377,19 @@ function fnShowEnd() {
 }
 
 /* ---------- Bucle del nivel ---------- */
-function fnTarget() {
-  let best = null, bestD = 1e9;
-  for (const n of FN.alive) {
-    const k = n.toLowerCase(), p = FN.npc[k], d = Math.hypot(p.x - FN.px, p.y - FN.py);
-    if (d > 1.4) continue;
-    const a = Math.abs(normAngle(Math.atan2(p.y - FN.py, p.x - FN.px) - FN.ang));
-    if (a < 0.6 && d < bestD) { best = k; bestD = d; }
-  }
-  return best;
-}
-const fnDiscs = () => FN.alive.map(n => ({ x: FN.npc[n.toLowerCase()].x, y: FN.npc[n.toLowerCase()].y, r: NPC_R })).concat([{ x: FN.dx, y: FN.dy, r: 0.25 }]);
 function finalUpdate(dt) {
   if (!FN) return;
-  mzTimerUpdate();
   if (mzOverlayTick(dt)) return;
   FN.t += dt;
   fpTurnTick(FN, dt);
+  fnEyesTick(dt);
+  if (FN.clockOn && !FN.anim && !FN.cine && FN.clock > 0) {     // el minuto corre siempre: mientras miras, escuchas y respondes
+    FN.clock -= dt;
+    if (FN.clock <= 0) { fnTimeUp(); return; }
+  }
   if (FN.cine) { FN.cine.t += dt; if (!FN.cine.done && FN.cine.t > FN.cine.dur) { FN.cine.done = true; fnShowEnd(); } return; }
   if (FN.anim) { fnAnimTick(dt); return; }
-  if (FN.state === "dialog" && FN.talkT != null) {
-    if (!typerBusy()) { FN.talkT -= dt; if (FN.talkT <= 0) { FN.talkT = null; FN.onTimeout(); } }
-    return;
-  }
   if (FN.state !== "play") return;
-  fpWalk(FN, dt, FN_BODY, FN_WORLD, fnDiscs());
   if (FN.afterT != null && (FN.afterT -= dt) <= 0) { FN.afterT = null; fnAfterRounds(); return; }
   FN.barkT -= dt;                                          // el otro Pepe no se calla
   if (FN.barkT <= 0) {
@@ -375,7 +403,9 @@ function finalKey(c) {
   if (!FN || FN.cine || FN.anim) return;
   if (FN.state === "dialog") { talkKey(c, fnChoose); return; }
   if (FN.state !== "play") return;
-  if (c === "KeyE") { const k = fnTarget(); if (k && !FN.asked.has(k)) { $("diary").classList.add("hidden"); fnRound(k); } }
+  if (c === "KeyA" || c === "ArrowLeft") fnLook(-1);
+  else if (c === "KeyD" || c === "ArrowRight") fnLook(1);
+  else if (c === "KeyE") { const k = fnFocusKey(); if (k && !FN.asked.has(k) && fnSettled()) { $("diary").classList.add("hidden"); fnRound(k); } }
   else if (c === "KeyJ") diaryToggle(fnDiaryLines());
 }
 function fnDiaryLines() {
@@ -422,8 +452,9 @@ function finalRender() {
   const M = mzSprites(), items = [];
   if (M) items.push({ img: M.roadsign, x: 2.4, y: 9.55, h: 0.75 });
   for (const n of FN.alive) {
-    const k = n.toLowerCase(), sit = n === FN.cx.wounded;
-    const img = n === "Paul" ? (sit || !M ? BSPR.paul : M.paulStand) : n === "Sebas" && sit && M ? M.sebasSit : charSprite(n);
+    const k = n.toLowerCase(), sit = n === FN.cx.wounded && n !== FN.holder;
+    let img = n === "Paul" ? (sit || !M ? BSPR.paul : M.paulStand) : n === "Sebas" && sit && M ? M.sebasSit : charSprite(n);
+    if (n === FN.holder && !FN.cine) img = BSPR[k + "_" + fnAimAt()] || img;        // les apunta: a ti, y después al otro
     items.push({ img, x: FN.npc[k].x, y: FN.npc[k].y, h: personH(img), fogK: 0.7 });
   }
   if (!(FN.stalinLeft && FN.anim && FN.anim.t > 2.2) && !(FN.cine)) {     // el otro Pepe (o lo que de verdad es)
@@ -447,10 +478,26 @@ function finalRender() {
 }
 function fnHud() {
   if (!FN.alive.length) return;
-  hudPanel([{ t: "¿QUIÉN ES PEPE?", c: UI.acc }, { t: `Ya preguntaron: ${FN.asked.size} de ${FN.alive.length}` }]);
   if (FN.state !== "play") return;
-  hudCorner("[J] lo que sabes");
-  const k = fnTarget();
-  if (k) hudPrompt(FN.asked.has(k) ? `${fnName(k)} ya les preguntó` : `[E] Que te pregunte ${fnName(k)}`);
-  else hudMouseHint();
+  hudCorner("[A] [D] mirar · [J] lo que sabes");
+  hudCorner(`Ya preguntaron ${FN.asked.size} de ${FN.alive.length}`, 40);
+  if (!fnSettled()) return;
+  const k = fnFocusKey();
+  if (k) hudPrompt(FN.asked.has(k) ? `${fnName(k)} ya te preguntó` : `[E] Que te pregunte ${fnName(k)}`);
+  else hudPrompt("El otro Pepe · mira a tus amigos");
+}
+// Quien tiene la pistola cambia de blanco cada tanto: a ti, al otro, a ti…
+function fnAimAt() { return Math.floor(FN.t / 2.6) % 2 ? "side" : "you"; }
+// El retrato del otro Pepe en el diálogo: tu cara, y cada 4 o 5 segundos, por un instante, los ojos y la boca de esa cosa
+function fnEyesTick(dt) {
+  if (FN.eyeOn > 0) FN.eyeOn -= dt;
+  else if ((FN.eyeT -= dt) <= 0) { FN.eyeT = rand(4, 5); FN.eyeOn = 0.45; }
+  const alien = FN.eyeOn > 0 && Math.floor(FN.eyeOn / 0.075) % 2 === 0;
+  const talking = !$("talk").classList.contains("hidden") && $("talkWho").textContent === CHARS.doble.name;
+  const key = talking ? (alien ? "a" : "p") + FN.talkLog.length : 0;      // cada frase nueva redibuja el retrato
+  if (key === FN.eyeDrawn) return;
+  FN.eyeDrawn = key;
+  if (!talking) return;
+  const g = $("talkPortrait").getContext("2d"), img = alien ? BSPR.dobleAlien : BSPR.doble;
+  g.imageSmoothingEnabled = false; g.clearRect(0, 0, 40, 40); drawHead(g, img, 40 * 0.075, 40, 40 * 0.85);
 }
