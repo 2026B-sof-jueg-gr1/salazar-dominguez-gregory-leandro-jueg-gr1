@@ -121,7 +121,11 @@ const CHARS = {
             look: { jacket: "#3a4a5a", hair: "#2a2220", style: "bun", apron: true, skin: "#b8845e" } },
   radio:  { name: "Radio", color: "#7dff9a", icon: true },                    // su retrato es la radio de la barra
   pepe:   { name: "Tú", color: "#9fcaff",
-            look: { jacket: "#4a6a9a", hair: "#2a1a12", style: "short", skin: "#c08a62", shirt: "#d8d2c0" } }
+            look: { jacket: "#4a6a9a", hair: "#2a1a12", style: "short", skin: "#c08a62", shirt: "#d8d2c0" } },
+  doble:  { name: "El otro Pepe", color: "#9fcaff",                         // el nivel 4: tu misma cara
+            look: { jacket: "#4a6a9a", hair: "#2a1a12", style: "short", skin: "#c08a62", shirt: "#d8d2c0" } },
+  rafael: { name: "Rafael", color: "#d0705e",                               // el papá de Stalin: la cara que usa don Lucho
+            look: { jacket: "#3a3a3a", poncho: "#5e2420", style: "hat", skin: "#a87a58", pants: "#2a2622" } }
 };
 const CHAR_BY_NAME = {};
 for (const k in CHARS) { CHARS[k].key = k; CHAR_BY_NAME[CHARS[k].name] = CHARS[k]; }
@@ -701,7 +705,7 @@ function newGameState(state) {
     ...(() => { const k = path.findIndex(([x, y]) => MAP[y][x] === "=" || MAP[y][x] === "X"), c = path[Math.max(0, k - 1)];   // la esquina opuesta, a la entrada del pasillo
       return { ax: c[0] + 0.5, ay: c[1] + 0.5 }; })(),                // ahí empieza el alien, buscándote
     exit: { x: exit.x + 0.5, y: exit.y + 0.5 },
-    enc: [], queue, spawnCD: 10, moved: 0, lastCell: start.y * COLS + start.x,
+    enc: [], queue, spawnCD: 4, moved: 0, lastCell: start.y * COLS + start.x,
     props, flies, cx, path, party: [], lost: [], perk: {}, alienBoost: 0, runner,
     talkLog: [], talkOpts: [], cur: null, shot: null, talkT: null, flee: null, resolved: 0, saved: 0,
     seen: Array.from({ length: ROWS }, () => Array(COLS).fill(false)),
@@ -726,7 +730,7 @@ function spawnCandidates() {
   const out = [];
   for (let d = 1; d <= 9; d++) {
     x += f[0]; y += f[1];
-    if (MAP[y][x] !== "o" && d >= 3) out.push({ x, y, f, d, seen: lineOfSight(G.px, G.py, x + 0.5, y + 0.5) && Math.hypot(x + 0.5 - G.px, y + 0.5 - G.py) < 5 });
+    if (MAP[y][x] !== "o" && d >= 2) out.push({ x, y, f, d, seen: lineOfSight(G.px, G.py, x + 0.5, y + 0.5) && Math.hypot(x + 0.5 - G.px, y + 0.5 - G.py) < 5 });
     const nexts = D4.filter(([dx, dy]) => !(dx === -f[0] && dy === -f[1]) && !isWall(x + dx, y + dy));
     if (nexts.length !== 1) break;                 // cruce o callejón: hasta aquí es seguro que pasará
     f = nexts[0];
@@ -789,7 +793,7 @@ function mzSpawnTick(dt) {
   }
   if (G.enc.some(e => !e.done) || !G.queue.length) return;
   const atExit = Math.hypot(G.exit.x - G.px, G.exit.y - G.py) < 3;
-  if (!atExit && (G.spawnCD > 0 || G.moved < 7)) return;
+  if (!atExit && (G.spawnCD > 0 || G.moved < 3)) return;
   const toExit = Math.hypot(G.exit.x - G.px, G.exit.y - G.py);
   // Stalin, el real, solo está cerca de la luz; el falso, lejos
   let i = G.queue.findIndex(q => { const s = mzSpec(q.name, q.impostor, G.cx); return (!s.near || toExit < 12 || G.queue.length === 1) && (!s.far || toExit > 12); });
@@ -798,7 +802,7 @@ function mzSpawnTick(dt) {
   if (mzSpawn(spec)) { G.queue.splice(i, 1); G.moved = 0; }
 }
 // Al resolver un encuentro, una pausa antes del próximo (más larga después de un impostor)
-function mzAfterEncounter(e) { G.spawnCD = e.impostor ? 40 : 26; G.moved = 0; }
+function mzAfterEncounter(e) { G.spawnCD = e.impostor ? 16 : 9; G.moved = 0; }   // antes: 40 y 26 s
 
 /* ---------- El alien busca: va hacia donde cree que estás; si te huele, viene directo ---------- */
 function moveAlienSearch(dt) {
@@ -827,7 +831,7 @@ function mzRunnerTick() {
   G.flee = { img, x: G.px + vx * d, y: G.py + vy * d, vx, vy, t: 0 };
   voice(name === "Sebas" ? "«¡No, no, no! ¡Lo vi!»" : "«¡Ahí está! ¡Ahí está!»", name, G.flee.x, G.flee.y);
   G.queue.unshift({ name, impostor: false, rejoin: true });  // habrá que encontrarlo otra vez: es el próximo en aparecer
-  G.spawnCD = 9; G.moved = 7;
+  G.spawnCD = 5; G.moved = 3;
 }
 function mzFleeTick(dt) {
   const f = G.flee; if (!f) return;
@@ -838,7 +842,23 @@ function mzFleeTick(dt) {
 
 let G;
 const keys = {};
+// Trucos (se escriben en cualquier momento):
+//   «ovni»: en el maizal, sales directo al nivel 4 · «amanecer»: final bueno · «otro»: eligieron al otro Pepe
 let cheat = "";
+function cheatKey(ch) {
+  cheat = (cheat + ch).slice(-12);
+  if (cheat.endsWith("amanecer")) { cheat = ""; cheatEnding("good"); return true; }
+  if (cheat.endsWith("otro")) { cheat = ""; cheatEnding("bad"); return true; }
+  if (cheat.endsWith("ovni") && MODE === "maizal" && G && (G.state === "play" || G.state === "dialog")) { cheat = ""; mzWin(); return true; }
+  return false;
+}
+function cheatEnding(kind) {
+  setPause(false);
+  if (MODE !== "final" || !FN) startLevel(4);
+  STORYP = null; hidePanels(); talkClose();
+  FN.anim = null; FN.opts = null; FN.talkT = null;
+  fnEnding(kind);
+}
 let AC = null;
 
 /* ============ Audio compartido (todos los niveles) ============
@@ -949,6 +969,7 @@ function releaseMouse() {
 function fpActive() {
   if (MODE === "bar") return B && B.state === "play" ? B : null;
   if (MODE === "maizal") return G && G.state === "play" && !G.flee ? G : null;   // mientras alguien huye, solo miras
+  if (MODE === "final") return FN && FN.state === "play" && !FN.anim && !FN.cine ? FN : null;
   return null;
 }
 function fpLook(S, e) {
@@ -1100,18 +1121,21 @@ let mzTimerShown = null;
 function mzTimerUpdate() {
   const el = $("mzTimer");
   if (!el) return;
-  const on = MODE === "maizal" && G && G.state === "dialog" && G.talkT != null;
+  const fin = MODE === "final" && FN && FN.state === "dialog" && FN.talkT != null;
+  const on = fin || (MODE === "maizal" && G && G.state === "dialog" && G.talkT != null);
   if (!on) { if (mzTimerShown !== null) { el.classList.add("hidden"); mzTimerShown = null; } return; }
-  const s = Math.max(0, Math.ceil(G.talkT)), key = s + (G.party.includes("Sebas") ? "s" : "a");
+  const T = fin ? FN.talkT : G.talkT;
+  const lbl = fin ? "te están mirando" : G.party.includes("Sebas") ? "Sebas dispara en" : "esa cosa llega en";
+  const s = Math.max(0, Math.ceil(T)), key = s + lbl;
   const talk = $("talk"); el.style.bottom = (talk.offsetHeight + 6) + "px";
-  el.style.setProperty("--p", clamp(G.talkT / 15, 0, 1).toFixed(3));
+  el.style.setProperty("--p", clamp(T / 15, 0, 1).toFixed(3));
   if (key === mzTimerShown) return;
   if (mzTimerShown !== null && s <= 5 && s > 0) tick(s);
   mzTimerShown = key;
   el.classList.remove("hidden");
   el.className = s <= 4 ? "danger" : s <= 8 ? "warn" : "calm";
   $("mzTimerNum").textContent = s;
-  $("mzTimerLbl").textContent = G.party.includes("Sebas") ? "Sebas dispara en" : "esa cosa llega en";
+  $("mzTimerLbl").textContent = lbl;
 }
 const tick = sndSafe(sec => {                           // el reloj suena en los últimos segundos
   sndTone("square", sec <= 2 ? 1400 : 1000, 0, AC.currentTime, 0.06, 0.05, SND.sfx, 0.002);
@@ -1435,7 +1459,8 @@ function mzSub(text, who) { if (!MZO.sub || MZO.sub.text !== text) MZO.sub = { t
 const VOICE = { ok: typeof speechSynthesis !== "undefined", es: null };
 const VOICE_STYLE = {
   paul: { pitch: 0.75, rate: 1.0 }, samira: { pitch: 1.4, rate: 1.08 }, sebas: { pitch: 1.15, rate: 1.18 }, stalin: { pitch: 0.9, rate: 0.88 },
-  lucho: { pitch: 0.55, rate: 0.8 }, carmen: { pitch: 1.25, rate: 0.95 }, radio: { pitch: 0.6, rate: 0.85 }
+  lucho: { pitch: 0.55, rate: 0.8 }, carmen: { pitch: 1.25, rate: 0.95 }, radio: { pitch: 0.6, rate: 0.85 },
+  doble: { pitch: 0.85, rate: 0.95 }, rafael: { pitch: 0.55, rate: 0.75 }
 };
 function pickVoice() {
   try { const vs = speechSynthesis.getVoices(); VOICE.es = vs.find(v => /^es[-_](EC|CO|PE|MX|419|US)/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null; } catch (e) { VOICE.es = null; }
@@ -1488,7 +1513,7 @@ function drawEcho(dt) {
 // Una voz a lo lejos: subtítulo, se oye (si tiene quién la diga) y, si se sabe de dónde vino, eco hacia allá
 function voice(text, who, x, y) {
   mzSub(text.replace(/^\((.*)\)$/s, "$1"), who);
-  const S = MODE === "bar" ? B : G;
+  const S = MODE === "bar" ? B : MODE === "final" ? FN : G;
   const d = x != null && S ? Math.hypot(x - S.px, y - S.py) : 0;
   if (who) speak(who, text, clamp(1.1 - d / 12, 0.35, 1));
   if (x != null && S) echoFrom(x, y, who, S);
@@ -1498,9 +1523,10 @@ const storyDur = s => clamp(1.4 + s.text.length * 0.05, 2.6, 6);
 function ovState() {                                  // "play" / "dialog" en el nivel que esté activo
   if (MODE === "bar") return !B ? "" : B.state === "play" ? "play" : B.state === "talk" ? "dialog" : B.state;
   if (MODE === "chase") return CH && !CH.done ? "cine" : "";
+  if (MODE === "final") return !FN ? "" : FN.state;
   return G ? G.state : "";
 }
-const mzFrozen = () => (MODE === "maizal" || MODE === "bar") && ovState() === "play" && MZO.storyCur && MZO.storyCur.t >= 0;
+const mzFrozen = () => (MODE === "maizal" || MODE === "bar" || MODE === "final") && ovState() === "play" && MZO.storyCur && MZO.storyCur.t >= 0;
 // Devuelve true si una pantalla negra está pausando el juego
 function mzOverlayTick(dt) {
   if (!MZO.bandCur && MZO.band.length) MZO.bandCur = MZO.band.shift();
@@ -1546,7 +1572,7 @@ function pxDraw(items) {
 }
 const MZO_COL = { good: "#a6e07a", danger: "#ff5b68", warn: "#ffb347", info: "#e8c86a", story: "#e8c86a" };
 function drawMzOverlay() {
-  if (MODE !== "maizal" && MODE !== "bar" && MODE !== "chase") return;
+  if (MODE !== "maizal" && MODE !== "bar" && MODE !== "chase" && MODE !== "final") return;
   const st = ovState();
   const items = [];
   // C · subtítulos de VHS (abajo, solo cuando no hay diálogo)
@@ -1613,10 +1639,9 @@ function revealAhead(n) {
 
 const MZ_BODY = { speed: CFG.MOVE, r: 0.22, bobRate: 9, bobAmp: 2.5 };
 
-function mzWin() {
-  const names = G.party.length ? G.party : FRIENDS;
-  const list = names.slice(0, -1).join(", ") + " y " + names[names.length - 1];
-  endGame(true, "FUERA DEL MAIZAL", `Cruzas el último surco con ${list}. Enfrente, sobre la vía, la luz verde espera.\n\nDetrás de ustedes, alguien sale del maíz. Tiene tu cara.\n\n(El final todavía no está hecho.)`);
+function mzWin() {                                     // fuera del maizal: empieza el nivel 4 con los que llegaron
+  FINAL_IN = { party: G.party.slice(), lost: G.lost.slice() };
+  startLevel(4);
 }
 
 function updateCine(dt) {
@@ -2162,7 +2187,7 @@ function cornStalk(x, baseY, s, e, sway) {
   ctx.fillRect(x - 1.5 * s, baseY - hgt * 0.5, 3 * s, 9 * s);
 }
 
-function renderDawn(t) {
+function renderDawn(t, crewImgs) {
   const p = clamp(t / 7, 0, 1), e = p * p * (3 - 2 * p), hy = 232;
   const sky = ctx.createLinearGradient(0, 0, 0, hy);
   sky.addColorStop(0, mixc("#070d20", "#3f74b8", e));
@@ -2219,7 +2244,9 @@ function renderDawn(t) {
 
   // El grupo camina hacia la luz
   const M = mzSprites();
-  const crew = [[BSPR.pepe, 0, 0.2], [BSPR.samira, -0.5, 0.3], [BSPR.sebas, 0.5, 0.3], [BSPR.stalin, -0.25, 0.38], [M ? M.paulStand : BSPR.paul, 0.25, 0.38]];
+  const SLOTS = [[0, 0.2], [-0.5, 0.3], [0.5, 0.3], [-0.25, 0.38], [0.25, 0.38]];
+  const crew = crewImgs ? crewImgs.map((img, i) => [img, ...SLOTS[i]])
+    : [[BSPR.pepe, 0, 0.2], [BSPR.samira, -0.5, 0.3], [BSPR.sebas, 0.5, 0.3], [BSPR.stalin, -0.25, 0.38], [M ? M.paulStand : BSPR.paul, 0.25, 0.38]];
   const list = crew.map(([img, off, d0], i) => {
     const d = clamp(d0 + t * 0.04, 0, 0.8), y0 = hy + 2 + (H - hy) * Math.pow(1 - d, 1.7);
     const sz = (y0 - hy) / (H - hy) * 190 + 10, y = y0 - Math.abs(Math.sin(t * 5 + i * 1.3)) * 3 * (sz / 190);
@@ -2228,8 +2255,9 @@ function renderDawn(t) {
   for (const f of list) {
     ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(f.x, f.y, f.sz * 0.25, f.sz * 0.05, 0, 0, 7); ctx.fill();
     tctx.clearRect(0, 0, W, H);
-    const fw = f.sz * f.img.width / f.img.height;
-    tctx.drawImage(f.img, f.x - fw / 2, f.y - f.sz * 0.97, fw, f.sz);
+    const img = typeof f.img === "function" ? f.img(t) : f.img;          // el otro Pepe: a ratos se le ve lo que es
+    const sz = img === SPR.alien ? f.sz * 1.7 : f.sz, fw = sz * img.width / img.height;
+    tctx.drawImage(img, f.x - fw / 2, f.y - sz * 0.97, fw, sz);
     tctx.globalCompositeOperation = "source-atop";
     tctx.fillStyle = `rgba(8,10,20,${(0.82 - 0.4 * e).toFixed(2)})`; tctx.fillRect(0, 0, W, H);
     tctx.globalCompositeOperation = "source-over";
@@ -3293,7 +3321,7 @@ const TAG_COLOR = {
   "Preguntar": "#9fb3cc", "Confiar": "#a6d98a", "Acabar": "#e08a8a", "Esperar": "#9fb3cc"
 };
 const typer = { queue: [], timer: null, cur: null, onDone: null, waitLast: false, waiting: false, gen: 0 };
-const talkLogOf = () => (MODE === "bar" ? B && B.talkLog : MODE === "chase" ? CH && (CH.log = CH.log || []) : G && G.talkLog) || [];
+const talkLogOf = () => (MODE === "bar" ? B && B.talkLog : MODE === "chase" ? CH && (CH.log = CH.log || []) : MODE === "final" ? FN && FN.talkLog : G && G.talkLog) || [];
 const cleanNarr = t => t.replace(/^\((.*)\)$/s, "$1");
 
 // Caja de conversación compartida por los tres niveles (bar, maizal y final): abrir y cerrar
@@ -3727,12 +3755,14 @@ function startLevel(n) {
   if (n === 1) startBar();
   else if (n === 2) { initAudio(); if (!BAR_RESULT) BAR_RESULT = DEFAULT_BAR_RESULT(); startChase(); }
   else if (n === 3) { initAudio(); if (!BAR_RESULT) BAR_RESULT = DEFAULT_BAR_RESULT(); startMaizalAfterChase(); }
+  else if (n === 4) startFinal(FINAL_IN);
 }
 let PAUSED = false;
 function canPause() {
   if (MODE === "bar") return !!B && B.state !== "summary";
   if (MODE === "chase") return !!CH && !CH.done;
   if (MODE === "maizal") return !!G && !["end", "cutscene", "intro"].includes(G.state);
+  if (MODE === "final") return !!FN && (FN.state === "play" || FN.state === "dialog") && !FN.cine;
   return false;
 }
 function setPause(on) {
@@ -3745,7 +3775,7 @@ function setPause(on) {
 }
 // Escape abre la pausa solo mientras caminas (en un diálogo sirve para salir de él); P, siempre
 const inPlay = () => !!fpActive();
-function levelOfMode() { return MODE === "bar" ? 1 : MODE === "chase" ? 2 : 3; }
+function levelOfMode() { return MODE === "bar" ? 1 : MODE === "chase" ? 2 : MODE === "final" ? 4 : 3; }
 function showLevels() { $("levelList").classList.toggle("hidden"); }
 
 /* ============ Entrada y bucle principal ============ */
@@ -3757,29 +3787,23 @@ window.addEventListener("keydown", e => {
   const c = e.code;
   if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(c)) e.preventDefault();
   keys[c] = true;
+  if (c.startsWith("Key") && cheatKey(c.slice(3).toLowerCase())) return;
   if (c === "KeyP" || (c === "Escape" && PAUSED)) { setPause(!PAUSED); return; }
   if (PAUSED) return;
   if (endShown() && endKey(c)) return;
   if (c === "Escape" && inPlay()) { setPause(true); return; }
   if (MODE === "chase") { chaseKey(c); return; }
   const adv = c === "Enter" || c === "Space" || c === "KeyE";
-  if (adv && (MODE === "bar" || MODE === "maizal") && mzStoryKey()) return;     // pantalla negra: avanza
+  if (adv && (MODE === "bar" || MODE === "maizal" || MODE === "final") && mzStoryKey()) return;     // pantalla negra: avanza
   if (STORYP) { if (c === "Enter" || c === "Space") storyNext(); return; }       // intro de cualquier nivel
   if (MODE === "bar") { if (B) barKey(c); return; }
+  if (MODE === "final") { finalKey(c); return; }
   mzKey(c);
 });
 function mzKey(c) {
   if (G.state === "menu") { if (c === "Enter" || c === "Space") startFromMenu(); return; }
   if (G.state === "cutscene") { if ((c === "Enter" || c === "Space") && G.cine.t > 1.5) G.cine.t = G.cine.dur; return; }
   if (G.state === "end" || G.state === "shoot") return;
-  if (c.startsWith("Key")) {                          // truco: escribir "ovni" lleva directo a la escena de escape
-    cheat = (cheat + c.slice(3).toLowerCase()).slice(-4);
-    if (cheat === "ovni" && (G.state === "play" || G.state === "dialog")) {
-      cheat = "";
-      mzWin();
-      return;
-    }
-  }
   if (c === "KeyJ") { diaryToggle(mzDiaryLines()); return; }
 
   if (G.state === "dialog") talkKey(c, mzChoose);         // en el maizal no hay cómo irse: decides o se acaba el tiempo
@@ -3816,6 +3840,7 @@ function frame(now) {
     if (G.state === "menu") { G.t += dt; G.ang = Math.sin(G.t * 0.22) * 0.55; G.bob = 0; }
     if (MODE === "bar") { if (!PAUSED) barUpdate(dt); barRender(); }
     else if (MODE === "chase") { if (!PAUSED) chaseUpdate(dt); chaseRender(); }
+    else if (MODE === "final") { if (!PAUSED) finalUpdate(dt); finalRender(); }
     else { if (!PAUSED) update(dt); render(); }
   } catch (e) {
     showError(e.message + " · " + String(e.stack || "").split("\n").slice(1, 3).join(" ").trim());
