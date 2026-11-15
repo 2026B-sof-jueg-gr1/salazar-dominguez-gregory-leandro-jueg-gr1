@@ -407,16 +407,42 @@ function mzSaveText(e, cx) {
   if (e.rejoin) return `${e.name} vuelve contigo, avergonzado.`;
   return {
     Samira: "Samira se une. Recuerda por dónde vino: marca un tramo del camino.",
-    Sebas: "Sebas se une. Vio a alguien cerca de aquí y te lo marca en el mapa: ve a buscarlo. Pero Sebas solo vio una cara… y se desespera rápido.",
+    Sebas: G.perk && G.perk.borrow ? `Sebas se une. ${SEBAS_BORROW[G.perk.borrow].replace(/^Sebas /, "")[0].toUpperCase()}${SEBAS_BORROW[G.perk.borrow].replace(/^Sebas /, "").slice(1)}`
+         : G.perk && G.perk.spotUsed && !G.enc.some(x => x.spotted) ? "Sebas se une. Tiembla tanto que no alcanzó a ver a nadie… y se desespera rápido."
+         : "Sebas se une. Vio a alguien cerca de aquí y te lo marca en el mapa: ve a buscarlo. Pero Sebas solo vio una cara… y se desespera rápido.",
     Paul: "Paul se une. Si esa cosa te alcanza, se le lanza encima.",
     Stalin: "Stalin se une. Siente dónde está esa cosa: la ves en tu mapa."
   }[e.name];
 }
-function mzGivePerk(name, on) {
+// Si ya no queda nadie por encontrar, Sebas hace lo que habría hecho el amigo que perdiste
+// (al que le diste paz o dejaste atrás): te da la ayuda que ese amigo no alcanzó a darte.
+const SEBAS_BORROW = {
+  Samira: "Sebas se acuerda de por dónde vino Samira: marca un tramo del camino.",
+  Paul: "Sebas promete hacer lo que habría hecho Paul: si esa cosa te alcanza, se le lanza encima.",
+  Stalin: "Sebas siente lo que sentía Stalin: ves a esa cosa en tu mapa."
+};
+function mzSebasBorrow() {
+  const name = G.lost.slice().reverse().find(n => SEBAS_BORROW[n]);
+  if (!name) return null;
+  G.perk.borrow = name;
+  mzApplyPerk(name, true, "Sebas");
+  return name;
+}
+function mzApplyPerk(name, on, by) {
   const P = G.perk;
   if (name === "Samira" && on) revealAhead(20);
-  if (name === "Sebas" && on && !P.spotUsed) { P.spotUsed = true; mzSebasSpot(G.cur ? { x: G.cur.bx, y: G.cur.by } : { x: G.px, y: G.py }); }   // una sola vez
-  if (name === "Paul") P.shield = on ? 1 : 0;
+  if (name === "Paul") { P.shield = on ? 1 : 0; P.shieldBy = by || "Paul"; }
+  if (name === "Stalin") P.stalin = on;
+}
+function mzGivePerk(name, on) {
+  const P = G.perk;
+  if (name === "Sebas" && P.borrow) { if (P.borrow !== "Samira") mzApplyPerk(P.borrow, on, "Sebas"); return; }   // lo que te prestó viaja con él
+  if (name === "Samira" && on) revealAhead(20);
+  if (name === "Sebas" && on && !P.spotUsed) {          // una sola vez: te marca a alguien cerca, o si ya no queda nadie, te presta una ayuda
+    P.spotUsed = true;
+    if (!mzSebasSpot(G.cur ? { x: G.cur.bx, y: G.cur.by } : { x: G.px, y: G.py })) mzSebasBorrow();
+  }
+  if (name === "Paul") { P.shield = on ? 1 : 0; P.shieldBy = "Paul"; }
   if (name === "Stalin") P.stalin = on;
 }
 function mzDiaryLines() {
@@ -1520,32 +1546,74 @@ function mzBand(text, kind) {
 }
 function mzSub(text, who) { if (!MZO.sub || MZO.sub.text !== text) MZO.sub = { text, who, t: 0 }; }
 // Voces a lo lejos (bar y maizal): siempre como subtítulo de cinta, con el nombre de quien habla si se le reconoce
-// Eco: ondas que salen del lugar de donde vino la voz (o del borde de la pantalla, si está fuera de vista)
+/* ---------- Ecolocalización: de dónde vino esa voz ----------
+ * Al oír a alguien a lo lejos suena un eco (cuatro pulsos que se apagan) del lado de donde vino la voz:
+ * más fuerte cuanto más cerca, y apagado (sin agudos) si vino de atrás. En pantalla:
+ *  · si la voz está a la vista, ondas en el punto exacto, más grandes cuanto más cerca;
+ *  · si no, una flecha en un anillo alrededor del centro que apunta hacia ella (arriba = adelante, abajo = atrás)
+ *    y el borde de ese lado se ilumina.
+ * La dirección se recalcula en cada cuadro: si giras para buscarla, la marca gira con ella hasta quedar al frente. */
 let ECHO = null;
 function echoFrom(x, y, who, S) {
+  ECHO = { x, y, S, col: charColor(who, "#c8d6ea"), t: 0 };
   const a = normAngle(Math.atan2(y - S.py, x - S.px) - S.ang), d = Math.hypot(x - S.px, y - S.py);
-  ECHO = { a, d, col: charColor(who, "#c8d6ea"), t: 0 };
+  sndEcho(Math.sin(a), Math.cos(a) < -0.25, d);
 }
+const sndEcho = sndSafe((pan, behind, d) => {
+  const out = sndGain(clamp(1.15 - d / 14, 0.25, 1) * 0.14, "sfx", pan * 0.95);
+  const lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = behind ? 850 : 4200; lp.connect(out);
+  for (let i = 0; i < 4; i++) sndTone("sine", 1250, 950, AC.currentTime + i * 0.19, 0.15, Math.pow(0.55, i), lp, 0.004);
+});
 function drawEcho(dt) {
   const e = ECHO; if (!e) return;
+  const DUR = 3;
   e.t += dt;
-  if (e.t > 2.2) { ECHO = null; return; }
-  const k = Math.tan(CFG.FOV / 2), inView = Math.abs(e.a) < CFG.FOV / 2 * 0.92;
-  const x = inView ? W / 2 + Math.tan(e.a) / k * (W / 2) : e.a < 0 ? 0 : W, y = H * 0.46;
-  const near = clamp(1 - e.d / 14, 0.35, 1);
+  if (e.t > DUR) { ECHO = null; return; }
+  const S = e.S, dx = e.x - S.px, dy = e.y - S.py, d = Math.max(0.3, Math.hypot(dx, dy));
+  const a = normAngle(Math.atan2(dy, dx) - S.ang), k = Math.tan(CFG.FOV / 2);
+  const near = clamp(1.15 - d / 14, 0.35, 1), fade = Math.min(1, e.t / 0.15) * Math.min(1, (DUR - e.t) / 0.6);
   const rgb = [1, 3, 5].map(i => parseInt(e.col.substr(i, 2), 16)).join(",");
-  if (!inView) {                                         // el borde de ese lado se ilumina
-    const gw = W * 0.22, g = ctx.createLinearGradient(x, 0, e.a < 0 ? gw : W - gw, 0);
-    const a = 0.35 * near * Math.sin(Math.min(1, e.t / 2.2) * Math.PI);
-    g.addColorStop(0, `rgba(${rgb},${a.toFixed(3)})`); g.addColorStop(1, `rgba(${rgb},0)`);
-    ctx.fillStyle = g; ctx.fillRect(e.a < 0 ? 0 : W - gw, 0, gw, H);
-  }
-  ctx.save(); ctx.lineWidth = 2.5;
-  for (let i = 0; i < 4; i++) {                          // cuatro ondas, una tras otra: un eco
-    const t = e.t - i * 0.28; if (t < 0 || t > 1.3) continue;
-    const r = 14 + t * 190 * (inView ? 0.8 : 1.2), a = (1 - t / 1.3) * 0.7 * near;
-    ctx.strokeStyle = `rgba(${rgb},${a.toFixed(3)})`;
-    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+  const hz = H / 2 + (S.pitch || 0);
+  ctx.save(); ctx.lineCap = "round";
+  if (Math.abs(a) < CFG.FOV / 2 * 0.88) {                // a la vista: ondas en el punto de donde vino, a la altura de una cabeza
+    const ty = d * Math.cos(a), x = W / 2 + Math.tan(a) / k * (W / 2), y = hz - (H / ty) * 0.22;
+    const base = clamp((H / ty) * 0.35, 10, 90);
+    for (let i = 0; i < 4; i++) {
+      const t = (e.t - i * 0.3) % 1.4; if (e.t < i * 0.3 || t < 0) continue;
+      const r = base * (0.3 + t * 1.6), al = (1 - t / 1.4) * 0.75 * near * fade;
+      ctx.strokeStyle = `rgba(${rgb},${al.toFixed(3)})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(${rgb},${(0.9 * fade).toFixed(3)})`;                      // un rombo marca el punto
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 5, y); ctx.fill();
+  } else {                                               // fuera de vista: flecha en un anillo alrededor del centro
+    const cx = W / 2, cy = H * 0.45, R = H * 0.27, ux = Math.sin(a), uy = -Math.cos(a);   // el anillo no baja hasta los subtítulos
+    const pulse = 0.75 + 0.25 * Math.sin(e.t * 9), al = 0.85 * near * fade * pulse;
+    ctx.strokeStyle = `rgba(${rgb},${(al * 0.55).toFixed(3)})`; ctx.lineWidth = 4;   // tramo del anillo en esa dirección
+    ctx.beginPath(); ctx.ellipse(cx, cy, R * 1.3, R, 0, a - Math.PI / 2 - 0.32, a - Math.PI / 2 + 0.32); ctx.stroke();
+    const tx = cx + ux * R * 1.3, ty2 = cy + uy * R, s = 14;                           // la punta de la flecha
+    const nx = -uy, ny = ux;
+    ctx.fillStyle = `rgba(${rgb},${al.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(tx + ux * s, ty2 + uy * s);
+    ctx.lineTo(tx - ux * s * 0.4 + nx * s * 0.8, ty2 - uy * s * 0.4 + ny * s * 0.8);
+    ctx.lineTo(tx - ux * s * 0.4 - nx * s * 0.8, ty2 - uy * s * 0.4 - ny * s * 0.8);
+    ctx.fill();
+    for (let i = 0; i < 3; i++) {                        // ondas que salen de la flecha hacia afuera
+      const t = (e.t - i * 0.35) % 1.2; if (e.t < i * 0.35) continue;
+      const r = 8 + t * 40, aa = (1 - t / 1.2) * 0.6 * near * fade;
+      ctx.strokeStyle = `rgba(${rgb},${aa.toFixed(3)})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(tx + ux * 10, ty2 + uy * 10, r, a - Math.PI / 2 - 0.7, a - Math.PI / 2 + 0.7); ctx.stroke();
+    }
+    const side = ux < 0 ? 0 : W, gw = W * 0.2, g = ctx.createLinearGradient(side, 0, ux < 0 ? gw : W - gw, 0);   // el borde de ese lado
+    const ga = 0.3 * near * fade * Math.min(1, Math.abs(ux) * 1.5);
+    g.addColorStop(0, `rgba(${rgb},${ga.toFixed(3)})`); g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g; ctx.fillRect(ux < 0 ? 0 : W - gw, 0, gw, H);
+    if (uy > 0.4) {                                        // si viene de atrás, también abajo
+      const gb = ctx.createLinearGradient(0, H, 0, H - H * 0.22);
+      gb.addColorStop(0, `rgba(${rgb},${(0.3 * near * fade * uy).toFixed(3)})`); gb.addColorStop(1, `rgba(${rgb},0)`);
+      ctx.fillStyle = gb; ctx.fillRect(0, H - H * 0.22, W, H * 0.22);
+    }
   }
   ctx.restore();
 }
@@ -1729,7 +1797,7 @@ function update(dt) {
   mzFleeTick(dt);
   const ad = Math.hypot(G.ax - G.px, G.ay - G.py);
   if (ad < CFG.CATCH) {
-    if (G.perk.shield) { G.perk.shield = 0; pushAlienAway(9); growl(); toast("¡Paul se lanza contra esa cosa! Corre.", "danger"); }
+    if (G.perk.shield) { G.perk.shield = 0; pushAlienAway(9); growl(); toast(`¡${G.perk.shieldBy || "Paul"} se lanza contra esa cosa! Corre.`, "danger"); }
     else { endGame(false, "¡TE ATRAPÓ!", "El alien te encontró entre las plantas."); return; }
   }
 
@@ -1824,6 +1892,18 @@ function engPlanes(cam, world) {                          // piso y techo, fila 
   ctx.drawImage(engPC, 0, 0, NCOLS, H, 0, 0, W, H);
 }
 const engLows = [];
+// Muro bajo: una caja dentro de la casilla. Se calcula por dónde entra y sale el rayo, y se anota si queda adelante.
+function engLowHit(world, px, py, rdx, rdy, mx, my, ch, lw) {
+  const b = lw.box || FULL_BOX, x0 = mx + b[0], x1 = mx + b[1], y0 = my + b[2], y1 = my + b[3];
+  let txn = -Infinity, txf = Infinity, tyn = -Infinity, tyf = Infinity;
+  if (rdx !== 0) { const a1 = (x0 - px) / rdx, a2 = (x1 - px) / rdx; txn = Math.min(a1, a2); txf = Math.max(a1, a2); }
+  else if (px < x0 || px > x1) return;
+  if (rdy !== 0) { const a1 = (y0 - py) / rdy, a2 = (y1 - py) / rdy; tyn = Math.min(a1, a2); tyf = Math.max(a1, a2); }
+  else if (py < y0 || py > y1) return;
+  const tIn = Math.max(txn, tyn), tOut = Math.min(txf, tyf);
+  if (tIn < tOut && tOut > 0 && tIn > -0.01 && engLows.length < (world.lowMax || 4))
+    engLows.push({ ch, h: lw.h, dEnter: Math.max(0.05, tIn), dExit: tOut, side: txn > tyn ? 0 : 1 });
+}
 function engWalls(cam, world) {
   const { px, py, dx, dy, plx, ply, hz } = cam, Z = ENG.z;
   for (let i = 0; i < NCOLS; i++) {
@@ -1834,23 +1914,17 @@ function engWalls(cam, world) {
     if (rdx < 0) { stepX = -1; sdx = (px - mx) * ddx; } else { stepX = 1; sdx = (mx + 1 - px) * ddx; }
     if (rdy < 0) { stepY = -1; sdy = (py - my) * ddy; } else { stepY = 1; sdy = (my + 1 - py) * ddy; }
     engLows.length = 0;
+    {                                                      // la casilla donde estás: la barra ocupa solo una parte y puedes estar pegado a ella
+      const c0 = world.cell(mx, my), lw0 = c0 !== null && !world.floor(c0) && world.low[c0];
+      if (lw0) engLowHit(world, px, py, rdx, rdy, mx, my, c0, lw0);
+    }
     for (let n = 0; n < 64; n++) {
       if (sdx < sdy) { sdx += ddx; mx += stepX; side = 0; } else { sdy += ddy; my += stepY; side = 1; }
       ch = world.cell(mx, my);
       if (ch === null) break;
       if (world.floor(ch)) { ch = null; continue; }
       const lw = world.low[ch];
-      if (lw) {                                           // caja dentro de la casilla: se calcula por dónde entra y sale el rayo
-        const b = lw.box || FULL_BOX, x0 = mx + b[0], x1 = mx + b[1], y0 = my + b[2], y1 = my + b[3];
-        let txn = -Infinity, txf = Infinity, tyn = -Infinity, tyf = Infinity;
-        if (rdx !== 0) { const a1 = (x0 - px) / rdx, a2 = (x1 - px) / rdx; txn = Math.min(a1, a2); txf = Math.max(a1, a2); }
-        else if (px < x0 || px > x1) { ch = null; continue; }
-        if (rdy !== 0) { const a1 = (y0 - py) / rdy, a2 = (y1 - py) / rdy; tyn = Math.min(a1, a2); tyf = Math.max(a1, a2); }
-        else if (py < y0 || py > y1) { ch = null; continue; }
-        const tIn = Math.max(txn, tyn), tOut = Math.min(txf, tyf);
-        if (tIn < tOut && tOut > 0 && engLows.length < (world.lowMax || 4)) engLows.push({ ch, h: lw.h, dEnter: Math.max(0.05, tIn), dExit: tOut, side: txn > tyn ? 0 : 1 });
-        ch = null; continue;
-      }
+      if (lw) { engLowHit(world, px, py, rdx, rdy, mx, my, ch, lw); ch = null; continue; }
       break;                                              // pared entera
     }
     Z[i] = 1e9;
@@ -2140,8 +2214,8 @@ function render(skipCine) {
   ctx.restore();
   if (G.state === "shoot") drawShootFX();
   if (G.state === "play" || G.state === "dialog") { if (G.showMap) drawMinimap(); drawHud(); }
-  drawEcho(PAUSED ? 0 : 1 / 60);
   drawMzOverlay();
+  drawEcho(PAUSED ? 0 : 1 / 60);                        // encima de los subtítulos: la flecha no se tapa
 }
 
 function drawMinimap() {
@@ -3094,15 +3168,11 @@ const F = () => B.f;
 const DLG = {
   intro: {
     start: { say: () => [
-      ["Sebas", "¡Llegó Pepe! Ahora sí, que empiece la fiesta."],
+      ["Sebas", "¡Llegó Pepe! Y armado: trae la pistola de su papá, por la vía vieja."],
       ["Paul", "Llegó tarde. Como siempre."],
       ["Samira", "Paul, ya."],
-      ["Paul", "¿Qué? Es verdad."],
-      ["Sebas", "Pero llegó armado, ojo. Pepe trae la pistola de su papá. Si nos asaltan en la vía vieja, que sea con respeto."],
-      ["", "(Sientes el peso en el bolsillo de la chaqueta. Tu papá no te deja salir a carretera sin ella.)"],
-      ["", "(Nadie se ríe. Stalin no está en la mesa. Doña Carmen señala el patio con la barbilla.)"],
-      ["", "(En la barra, un viejo de poncho rojo te mira entrar. No aparta la vista.)"]
-    ], opts: () => [{ t: "Saludar con la mano y entrar.", go: null }] }
+      ["", "(Stalin está solo en el patio. En la barra, un viejo de poncho rojo no te quita la vista.)"]
+    ], opts: () => [{ t: "Entrar.", go: null }] }
   },
 
   paul: {
@@ -3624,9 +3694,8 @@ function startMaizalAfterChase() {
 
 /* ---------- Inicio ---------- */
 const BAR_STORY = [
-  "Viernes 13 de noviembre. Cumpleaños de Stalin.\n\nLa Última Parada es un bar de carretera en la vía vieja a Baños.",
-  "Hace un año eran inseparables. Hoy casi no se hablan.\n\nPaul no te perdona que faltaras al funeral de su abuela. Esta semana se cumple un año, y sigue vestido de negro. Samira y Sebas terminaron hace un mes y nadie sabe por qué. Stalin eligió esta ruta, dos horas más larga, y no ha dicho por qué.",
-  "Tú eres Pepe. Casi no vienes.\n\nPaul quiere salir a medianoche. Tienes media hora.\n\nLo que digan esta noche importa. Lo que callen, también."
+  "Viernes 13 de noviembre. Cumpleaños de Stalin.\n\nUn bar de carretera en la vía vieja a Baños.",
+  "Eres Pepe. Faltaste al funeral de la abuela de Paul y, desde entonces, casi no se hablan.\n\nPaul se va a medianoche. Tienes media hora.\n\nHabla con todos. Lo que te cuenten a solas importa."
 ];
 function startBar() {
   initAudio(); mzOverlayClear();
@@ -3641,7 +3710,7 @@ function startBar() {
 /* ---------- Audio: zumbido del bar y estática de la radio ---------- */
 function barAudio(on) {                                // murmullo de la radio, el zumbido de los focos y la rocola
   if (!on) { sndStop("bar"); sndStop("barMusic"); return; }
-  sndMusic("barMusic", "bar_music", 0.55);
+  sndMusic("barMusic", "bar_music", 0.1);                  // bajita: es la rocola del fondo, no tapa las voces
   sndLoop("bar", out => {
     const src = AC.createBufferSource(); src.buffer = noiseBuf(2); src.loop = true;
     const bp = AC.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2400; bp.Q.value = 0.8;
@@ -3753,8 +3822,8 @@ function barRender() {
   engVignette(0.32, 0.7);
 
   if (B.state === "play" || B.state === "talk") barHud();
-  drawEcho(PAUSED ? 0 : 1 / 60);
   drawMzOverlay();
+  drawEcho(PAUSED ? 0 : 1 / 60);                        // encima de los subtítulos: la flecha no se tapa
 }
 function barHud() {
   const left = BAR_LIMIT - B.min;

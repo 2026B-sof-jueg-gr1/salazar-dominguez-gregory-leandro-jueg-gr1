@@ -442,8 +442,8 @@ function finalRender() {
   if (FN.flash > 0) { ctx.fillStyle = `rgba(235,255,235,${FN.flash.toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
   if (FN.flash < 0) { ctx.fillStyle = "rgba(200,0,20,.55)"; ctx.fillRect(0, 0, W, H); }
   if (FN.state === "play" || FN.state === "dialog") fnHud();
-  drawEcho(PAUSED ? 0 : 1 / 60);
   drawMzOverlay();
+  drawEcho(PAUSED ? 0 : 1 / 60);                        // encima de los subtítulos: la flecha no se tapa
 }
 function fnHud() {
   if (!FN.alive.length) return;
