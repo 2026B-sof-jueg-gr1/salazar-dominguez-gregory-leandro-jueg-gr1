@@ -20,9 +20,8 @@
     .hidden { display: none !important; }
 
     .panel { position: absolute; background: rgba(4, 9, 18, .92); color: #e8f1ff; text-align: left; line-height: 1.5; }
-    .panel.full { inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8% 10%; text-align: center; }
+    .panel.full { inset: 0; display: flex; flex-direction: column; justify-content: safe center; align-items: center; padding: 8% 10%; text-align: center; overflow-y: auto; }
     .panel.full p { font-size: clamp(14px, 2.1vw, 19px); margin: 0 0 22px; white-space: pre-line; }
-    .panel.bottom { left: 0; right: 0; bottom: 0; padding: 12px 16px; border-top: 2px solid #3d6a4a; font-size: clamp(12px, 1.7vw, 15px); }
     .panel.center { left: 10%; right: 10%; top: 12%; padding: 18px 22px; border: 2px solid #6a8a3d; border-radius: 6px; font-size: clamp(12px, 1.8vw, 15px); }
 
     button {
@@ -31,24 +30,135 @@
     }
     button:hover:not(:disabled) { background: #2d4a6d; }
     button:disabled { opacity: .35; cursor: default; }
-    button.danger { color: #ffb0b6; border-color: #a04450; }
-    button.safe { color: #c9ff9c; border-color: #4f9a56; }
 
-    #dlgName { color: #b9f66d; font-weight: bold; margin-bottom: 4px; }
-    #dlgLog { max-height: 118px; overflow-y: auto; margin-bottom: 8px; }
-    #dlgLog div { margin: 2px 0; }
-    #dlgLog .you { color: #9fcaff; }
-    #dlgLog .narr { color: #a8a8a8; font-style: italic; }
-    #dlgLog .res { color: #fff1a6; }
-    #endTitle { font-size: clamp(26px, 6vw, 46px); font-weight: bold; margin: 0 0 14px; }
+    /* Conversaciones del bar */
+    #talk {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 44px 5% 2%; display: flex; flex-direction: column; gap: 8px;
+      text-align: left; font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; pointer-events: none;
+      background: linear-gradient(to top, rgba(3,6,12,.95) 0%, rgba(3,6,12,.82) 55%, rgba(3,6,12,0) 100%);
+    }
+    #talk > * { pointer-events: auto; }
+    #talkHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+    #talkHead .h-name { font-weight: bold; font-size: 15px; letter-spacing: .04em; }
+    #talkHead .h-place { color: #7d8fa6; }
+    #talkHead .chip { font-size: 11px; padding: 2px 9px; border-radius: 10px; border: 1px solid currentColor; }
+    #talkHead .chip.ok { color: #b9f66d; } #talkHead .chip.mid { color: #e8c86a; }
+    #talkHead .chip.bad { color: #e88a7a; } #talkHead .chip.neu { color: #8fa3bd; } #talkHead .chip.ear { color: #ff9a70; }
+    #talkCtx { color: #8ea6c4; font-size: 13px; font-style: italic; padding-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .talk-box {
+      --acc: #7d8fa6; position: relative; margin-top: 6px; padding: 16px 20px 14px; min-height: 62px; cursor: pointer;
+      background: rgba(9,14,24,.92); border: 1px solid #263750; border-left: 4px solid var(--acc); border-radius: 4px;
+    }
+    .talk-box.fade { animation: lineIn .2s ease-out; }
+    #talkWho {
+      position: absolute; top: -12px; left: 14px; padding: 1px 10px; font-weight: bold; font-size: 13px; letter-spacing: .05em;
+      color: var(--acc); background: #0a1120; border: 1px solid var(--acc); border-radius: 3px;
+    }
+    #talkLine { font-size: clamp(15px, 1.9vw, 18px); line-height: 1.5; color: #eef3fa; }
+    .talk-box.narr { background: transparent; border-color: transparent; }
+    .talk-box.narr #talkWho { display: none; }
+    .talk-box.narr #talkLine { color: #b4bfcd; font-style: italic; text-align: center; }
+    #talkNext { position: absolute; right: 12px; bottom: 6px; color: var(--acc); font-size: 12px; animation: nudge 1s ease-in-out infinite; }
+    #talkOpts { display: flex; flex-direction: column; gap: 4px; }
+    #talkOpts:empty { display: none; }
+    #talkOpts.grid { display: grid; grid-template-columns: 1fr 1fr; }
+    #talkOpts.grid .opt { flex-wrap: wrap; align-items: center; row-gap: 2px; }
+    #talkOpts.grid .opt .tag { min-width: 0; }
+    #talkOpts.grid .opt .t { flex-basis: 100%; }
+    .opt {
+      display: flex; align-items: baseline; gap: 10px; width: 100%; margin: 0; padding: 6px 12px; text-align: left;
+      font-family: inherit; font-size: clamp(13px, 1.6vw, 15px); color: #e6ecf5; background: rgba(13,20,33,.9);
+      border: 1px solid #24344b; border-radius: 4px; animation: optIn .22s ease-out both; transition: background .12s, border-color .12s, transform .12s;
+    }
+    .opt:hover, .opt:focus-visible { background: #1b2c45; border-color: #6a8ab0; transform: translateX(4px); outline: none; }
+    .opt .k { min-width: 14px; color: #6f86a6; font-family: "Courier New", monospace; font-weight: bold; }
+    .opt .tag { min-width: 104px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #9fb3cc; }
+    .opt .t { flex: 1; }
+    .opt .cost { font-size: 11px; color: #6f86a6; white-space: nowrap; }
+    .opt.hard { border-color: #6a3a24; }
+    .opt.leave { background: transparent; border-color: transparent; color: #8fa3bd; }
+    #talkFoot { font-size: 11px; color: #56677e; text-align: right; }
+    #talkFoot kbd { padding: 0 4px; font-size: 10px; }
+    #talkLog {
+      position: absolute; top: 5%; bottom: 5%; left: 8%; right: 8%; overflow-y: auto; padding: 16px 22px; text-align: left;
+      font-family: "Trebuchet MS", system-ui, sans-serif; font-size: 14px; line-height: 1.55;
+      background: rgba(4,8,16,.97); border: 1px solid #2c3f57; border-radius: 6px; cursor: pointer;
+    }
+    #talkLog .log-title { color: #b9f66d; font-weight: bold; margin-bottom: 8px; }
+    #talkLog .log-sep { margin: 14px 0 4px; color: #7d8fa6; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; border-bottom: 1px solid #1f2c3d; }
+    #talkLog .log-narr { color: #8f99a6; font-style: italic; }
+    @keyframes lineIn { from { opacity: .3; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @keyframes optIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @keyframes nudge { 0%, 100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(3px); opacity: 1; } }
+    /* Maizal: lo mismo, pero compacto (hay que ver el maíz y decidir rápido) */
+    #talk.compact { padding: 16px 4% 1.4%; gap: 4px; background: linear-gradient(to top, rgba(3,6,12,.92) 0%, rgba(3,6,12,.7) 60%, rgba(3,6,12,0) 100%); }
+    #talk.compact #talkHead { font-size: 11px; gap: 6px; }    /* solo los avisos (p. ej. "Don Lucho puede oírlos") */
+    #talk.compact #talkHead .h-name, #talk.compact #talkHead .h-place { display: none; }
+    #talk.compact #talkHead:empty { display: none; }
+    #talk.compact #talkHead .h-name { font-size: 13px; }
+    #talk.compact .talk-box { padding: 8px 14px 7px; min-height: 0; margin-top: 4px; }
+    #talk.compact #talkWho { top: -10px; font-size: 11px; padding: 0 8px; }
+    #talk.compact #talkLine { font-size: clamp(13px, 1.6vw, 15px); line-height: 1.35; }
+    #talk.compact #talkNext { bottom: 3px; }
+    #talk.compact #talkFoot, #talk.compact #talkCtx { display: none !important; }
+    #talk.compact #talkOpts, #talk.compact #talkOpts.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+    #talk.compact #talkOpts:empty { display: none; }
+    #talk.compact .opt { padding: 3px 9px; font-size: clamp(12px, 1.4vw, 13px); gap: 7px; flex-wrap: nowrap; }
+    #talk.compact .opt .tag { min-width: 62px; font-size: 10px; }
+    #talk.compact .opt .t { flex-basis: auto; }
+    .opt.used { opacity: .3; cursor: default; transform: none !important; }
+    /* Menú de niveles y pausa */
+    .menu-btn.menu-small { font-size: 13px; padding: 7px 18px; margin-top: 10px; opacity: .85; }
+    #levelList { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; align-items: stretch; }
+    #levelList .lv { font-family: "Courier New", monospace; font-size: 14px; padding: 7px 14px; border-radius: 0; text-align: left; }
+    #levelList .lv small { color: #8a96a6; }
+    #pause { background: rgba(0,0,0,.82); gap: 8px; }
+    #pause .pause-title { font: bold 30px "Courier New", monospace; letter-spacing: .3em; color: #e8f1ff; margin-bottom: 14px; }
+    #pause button { min-width: 220px; font-family: "Courier New", monospace; font-size: 15px; border-radius: 0; }
+    #pause .vol { margin-top: 14px; font: 14px "Courier New", monospace; color: #a8bdd9; display: flex; align-items: center; gap: 10px; }
+    #pause .vol input { width: 160px; accent-color: #b9f66d; }
+    #pause .vol span { min-width: 3ch; text-align: right; }
+    /* Retrato de quien habla */
+    #talkPortrait { display: none; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 46px; height: 46px;
+      image-rendering: pixelated; border: 2px solid var(--acc); border-radius: 3px; background: #0a0f18; }
+    .talk-box.has-portrait { padding-left: 70px; }
+    .talk-box.has-portrait #talkPortrait { display: block; }
+    .talk-box.has-portrait #talkWho { left: 66px; }
+    #talk.compact .talk-box.has-portrait { padding-left: 54px; }
+    #talk.compact #talkPortrait { width: 36px; height: 36px; left: 8px; }
+    #talk.compact .talk-box.has-portrait #talkWho { left: 50px; }
+    .bar-opt { display: block; width: 100%; text-align: left; margin: 3px 0; }
+    .bar-opt .k { display: inline-block; min-width: 18px; color: #fff; opacity: .75; }
+    .bar-opt .tag { color: #9fb3cc; margin-right: 6px; }
+    .bar-opt .tag::before { content: "["; } .bar-opt .tag::after { content: "]"; }
+    .bar-opt .cost { float: right; color: #8aa0bb; font-size: .9em; }
+    .bar-opt.hard { border-color: #b0603a; }
+    .bar-opt.hard .tag { color: #ffb08a; }
+    #endTitle { font-size: clamp(22px, 4.6vw, 42px); font-weight: bold; margin: 0 0 12px; }
+    #end p { font-size: clamp(13px, 1.8vw, 17px); margin-bottom: 16px; }
+    .end-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .end-btns button { margin: 0; }
     #endTitle.win { color: #b9f66d; }
     #endTitle.lose { color: #ff5b68; }
-    #toast {
-      position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
-      background: rgba(4, 9, 18, .85); border: 1px solid #607995; border-radius: 4px;
-      padding: 6px 12px; font-size: 13px; color: #fff1a6; pointer-events: none; opacity: 0; transition: opacity .25s;
+
+    /* Reloj de la conversación del maizal */
+    #mzTimer {
+      --p: 1; --c: #dfe6ee; position: absolute; right: 7%; bottom: 40%; z-index: 5; width: 78px; height: 78px;
+      border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;
+      background: radial-gradient(circle, rgba(5,9,16,.95) 58%, transparent 60%), conic-gradient(var(--c) calc(var(--p) * 360deg), rgba(255,255,255,.12) 0);
+      box-shadow: 0 0 18px rgba(0,0,0,.7); animation: tPulse 1.2s ease-in-out infinite;
     }
-    #toast.show { opacity: 1; }
+    #mzTimerNum { font: bold 30px "Courier New", monospace; color: var(--c); line-height: 1; }
+    #mzTimerLbl, #mzTimerSub { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;
+      font: bold 10px "Trebuchet MS", sans-serif; color: var(--c); letter-spacing: .04em; padding: 2px 8px; border-radius: 9px; background: rgba(5,9,16,.92); }
+    #mzTimerLbl { bottom: calc(100% + 5px); }
+    #mzTimerSub { top: calc(100% + 5px); }
+    #mzTimer.warn { --c: #ffb347; animation: tPulse .65s ease-in-out infinite, tShake .3s linear infinite; }
+    #mzTimer.danger { --c: #ff4a5a; box-shadow: 0 0 26px rgba(255,40,60,.55); animation: tBeat .4s ease-in-out infinite, tShakeHard .12s linear infinite; }
+    @keyframes tPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    @keyframes tBeat { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.18); } 55% { transform: scale(1.04); } }
+    @keyframes tShake { 0%, 100% { translate: 0 0; } 25% { translate: -1px 1px; } 75% { translate: 1px -1px; } }
+    @keyframes tShakeHard { 0% { translate: 0 0; } 25% { translate: -3px 2px; } 50% { translate: 3px -2px; } 75% { translate: -2px -3px; } 100% { translate: 2px 3px; } }
 
     /* Menú de inicio */
     .panel.menu { background: radial-gradient(ellipse at center, rgba(2,6,12,.45) 0%, rgba(0,0,0,.93) 78%); overflow: hidden; }
@@ -84,10 +194,15 @@
         <div id="menuEyes"></div>
         <div class="menu-inner">
           <div class="menu-title">HAY ALGO<br>EN EL MAIZAL</div>
-          <div class="menu-sub">No estás solo.</div>
           <button id="menuBtn" class="menu-btn">ENTRAR</button>
+          <button id="levelsBtn" class="menu-btn menu-small">ELEGIR NIVEL</button>
+          <div id="levelList" class="hidden">
+            <button class="lv" data-lv="1">1 · El bar</button>
+            <button class="lv" data-lv="2">2 · La persecución</button>
+            <button class="lv" data-lv="3">3 · El maizal</button>
+            <button class="lv" disabled>4 · El final <small>(próximamente)</small></button>
+          </div>
         </div>
-        <div class="menu-foot">W A S D · mouse</div>
       </div>
 
       <div id="intro" class="panel full hidden">
@@ -95,35 +210,45 @@
         <button id="introBtn">Continuar ▶</button>
       </div>
 
-      <div id="dialog" class="panel bottom hidden">
-        <div id="dlgName"></div>
-        <div id="dlgLog"></div>
-        <div id="dlgQs"></div>
-        <div id="dlgDecide">
-          <button id="btnSpare" class="safe">[E] Dejar vivir</button>
-          <button id="btnKill" class="danger">[F] Acabar con su vida</button>
-        </div>
-        <button id="btnContinue" class="hidden">Continuar ▶</button>
+      <div id="talk" class="hidden compact">
+        <div id="talkHead"></div>
+        <div id="talkCtx" class="hidden"></div>
+        <div id="talkBox" class="talk-box"><canvas id="talkPortrait" width="40" height="40"></canvas><span id="talkWho"></span><div id="talkLine"></div><span id="talkNext" class="hidden">▼</span></div>
+        <div id="talkOpts"></div>
+        <div id="talkFoot"><kbd>Clic</kbd>/<kbd>Enter</kbd> continuar · <kbd>1</kbd>–<kbd>5</kbd> responder · <kbd>H</kbd> lo que se dijo · <kbd>Q</kbd> despedirse</div>
       </div>
+      <div id="talkLog" class="hidden"></div>
+      <div id="mzTimer" class="hidden"><span id="mzTimerLbl">esa cosa llega en</span><span id="mzTimerNum">15</span><span id="mzTimerSub">segundos</span></div>
 
       <div id="diary" class="panel center hidden"></div>
+
+      <div id="pause" class="panel full hidden">
+        <div class="pause-title">PAUSA</div>
+        <button id="pResume">Continuar</button>
+        <button id="pRestart">Reiniciar nivel</button>
+        <button id="pLevels">Elegir nivel</button>
+        <button id="pMenu">Menú principal</button>
+        <label class="vol">Volumen <input id="pVol" type="range" min="0" max="100" step="5"> <span id="pVolN"></span></label>
+      </div>
 
       <div id="end" class="panel full hidden">
         <div id="endTitle"></div>
         <p id="endText"></p>
-        <button id="endBtn">Jugar de nuevo [R]</button>
-        <button id="endMenuBtn">Volver al inicio</button>
+        <div class="end-btns">
+          <button id="endNextBtn" class="hidden">Siguiente ▶</button>
+          <button id="endBtn">Jugar de nuevo [R]</button>
+          <button id="endMenuBtn">Volver al inicio</button>
+        </div>
       </div>
-
-      <div id="toast"></div>
     </div>
 
     <p class="help">
-      <kbd>Mouse</kbd> mirar (clic en el juego para activarlo; <kbd>Esc</kbd> lo libera) · <kbd>W</kbd>/<kbd>↑</kbd> adelante · <kbd>S</kbd>/<kbd>↓</kbd> atrás · <kbd>A</kbd>/<kbd>←</kbd> izquierda · <kbd>D</kbd>/<kbd>→</kbd> derecha ·
-      <kbd>J</kbd> recuerdos del viaje · <kbd>M</kbd> mapa · <kbd>R</kbd> reiniciar.<br>
-      Sigue la luz verde en el cielo. El alien atraviesa el maíz y se oculta entre las plantas.
+      <kbd>Mouse</kbd> mirar (clic en el juego; <kbd>Esc</kbd> lo libera) · <kbd>W A S D</kbd> moverse · <kbd>E</kbd> hablar o examinar ·
+      <kbd>1</kbd>–<kbd>5</kbd> responder · <kbd>Enter</kbd> continuar · <kbd>H</kbd> lo que se dijo · <kbd>Q</kbd> despedirse · <kbd>J</kbd> lo que sabes · <kbd>R</kbd> reiniciar.<br>
+      Tienes hasta la medianoche. Lo que te cuenten importa, y también dónde te lo cuentan.
     </p>
   </main>
   <script src="game.js"></script>
+  <script src="chase.js"></script>
 </body>
 </html>
