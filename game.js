@@ -874,10 +874,17 @@ const keys = {};
 let cheat = "";
 function cheatKey(ch) {
   cheat = (cheat + ch).slice(-12);
+  if (cheat.endsWith("alien")) { cheat = ""; alienFlash(); return true; }
   if (cheat.endsWith("amanecer")) { cheat = ""; cheatEnding("good"); return true; }
   if (cheat.endsWith("otro")) { cheat = ""; cheatEnding("bad"); return true; }
   if (cheat.endsWith("ovni") && MODE === "maizal" && G && (G.state === "play" || G.state === "dialog")) { cheat = ""; mzWin(); return true; }
   return false;
+}
+// «alien»: la foto de referencia titila cinco segundos sobre lo que estés haciendo
+function alienFlash() {
+  const el = $("alienFlash"); if (!el) return;
+  el.classList.remove("on"); void el.offsetWidth; el.classList.add("on");
+  if (AC) { try { scream(); } catch (e) { /* sin audio */ } }
 }
 function cheatEnding(kind) {
   setPause(false);
@@ -964,12 +971,14 @@ function sndStopAll() { for (const k in SND.loops) sndStop(k); }
  * de una pared). Abierta como archivo (file://) el navegador no deja procesarla: solo se ajusta su volumen. */
 let MUSIC_DIR = "audio/";
 const MUSIC_OPUS = (() => { try { return !!document.createElement("audio").canPlayType('audio/ogg; codecs="opus"'); } catch (e) { return false; } })();
-function sndMusic(name, file, base) {
+// start: segundo de la canción desde el que empieza (al dar la vuelta, vuelve al inicio)
+function sndMusic(name, file, base, start) {
   if (!AC) return null;
   return sndLoop(name, out => {
     const el = new Audio();
     el.loop = true; el.preload = "auto";
-    el.src = MUSIC_DIR + file + (MUSIC_OPUS ? ".ogg" : ".mp3");
+    el.src = MUSIC_DIR + file + (MUSIC_OPUS ? ".ogg" : ".mp3") + (start ? "#t=" + start : "");
+    if (start) el.addEventListener("loadedmetadata", () => { try { if (el.currentTime < start - 1) el.currentTime = start; } catch (e) { /* no se puede saltar */ } }, { once: true });
     el.addEventListener("ended", () => { try { el.currentTime = 0; } catch (e) { /* no se puede saltar */ } const p = el.play(); if (p && p.catch) p.catch(() => {}); });   // por si el servidor no deja volver al inicio
     const L = { el, base, level: 1, srcs: [{ stop() { el.pause(); el.removeAttribute("src"); el.load(); } }] };
     if (location.protocol !== "file:") {
@@ -995,6 +1004,14 @@ function sndMusicSet(name, level, cutoff) {
     L.gain.gain.setTargetAtTime(L.base * level, t, 0.15);
     if (cutoff) L.lp.frequency.setTargetAtTime(cutoff, t, 0.2);
   } else L.el.volume = clamp(SND.vol * L.base * level, 0, 1);
+}
+// El navegador solo deja sonar audio después de que el jugador toca algo. Al primer gesto: se reanuda
+// la mezcla y vuelve a intentar la música que quedó en silencio.
+function sndUnlock() {
+  if (!AC) return;
+  if (AC.state === "suspended") AC.resume().catch(() => {});
+  if (PAUSED) return;
+  for (const k in SND.loops) { const L = SND.loops[k]; if (L.el && L.el.paused) { const p = L.el.play(); if (p && p.catch) p.catch(() => {}); } }
 }
 function sndMusicPause(on) {
   for (const k in SND.loops) {
@@ -1279,14 +1296,25 @@ function showMenu() {
 }
 function startFromMenu() {
   if (MODE !== "menu" || G.state !== "menu") return;
-  startBar();                                   // la historia empieza en el bar
+  startLevel(1);                                // la historia empieza en el bar (y la música del menú se apaga)
 }
+// La música del maizal también suena en el menú, desde el minuto 5. Se intenta al abrir la página; si el
+// navegador lo bloquea (no deja sonar nada antes de un gesto), arranca con el primer clic, tecla o toque.
+const MENU_MUSIC_AT = 300;
+function menuMusic() {
+  if ($("menu").classList.contains("hidden") || PAUSED) return;
+  initAudio();
+  sndMusic("mzMusic", "maizal_music", 0.4, MENU_MUSIC_AT);
+  if (AC.state === "suspended") AC.resume().catch(() => {});      // permitido solo si el navegador ya deja sonar audio
+}
+for (const ev of ["pointerdown", "keydown", "touchstart"]) window.addEventListener(ev, () => { menuMusic(); sndUnlock(); }, { capture: true });
 function toMenu() {
   releaseMouse(); talkClose(); mzOverlayClear();
   if (MODE === "chase" && CH) { chaseAudioStop(); CH.done = true; }
   MODE = "menu"; sndStopAll(); ECHO = null; B = null; STORYP = null;
   G = newGameState("menu");
   showMenu();
+  menuMusic();                                         // ya hubo un gesto del jugador: puede sonar de una vez
 }
 
 /* ---------- Conversaciones del maizal: el mismo sistema del bar ---------- */
@@ -3938,6 +3966,7 @@ function showLevels() { $("levelList").classList.toggle("hidden"); }
 try { buildBarAssets(); } catch (e) { showError("texturas: " + e.message); }
 G = newGameState("menu");
 showMenu();
+menuMusic();                                           // si el navegador lo permite, suena desde ya
 
 window.addEventListener("keydown", e => {
   const c = e.code;

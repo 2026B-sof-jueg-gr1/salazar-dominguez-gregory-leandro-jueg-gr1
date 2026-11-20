@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hay algo en el maizal</title>
+  <link rel="icon" href="img/ovni.svg" type="image/svg+xml">
+  <link rel="icon" href="img/ovni-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="img/ovni-180.png">
   <style>
     /* =====================================================================
      * SISTEMA DE DISEÑO
@@ -119,6 +122,18 @@
     @keyframes blink { 0%, 62% { opacity: 0; } 64%, 66% { opacity: .95; } 67% { opacity: 0; } 69%, 80% { opacity: .85; } 82%, 100% { opacity: 0; } }
     @keyframes flick { 0%, 90%, 100% { opacity: 1; } 91% { opacity: .25; } 92% { opacity: 1; } 94% { opacity: .5; } 95% { opacity: 1; } }
 
+    /* «alien»: la foto de referencia titila 5 segundos (máx. ~2,5 destellos por segundo: no es un estroboscopio) */
+    #alienFlash { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: #000; pointer-events: none; opacity: 0; visibility: hidden; }
+    #alienFlash img { width: 100%; height: 100%; object-fit: cover; filter: sepia(.3) contrast(1.15); }
+    #alienFlash.on { visibility: visible; animation: alienFlick 2s steps(1) forwards; }
+    #alienFlash.on img { animation: alienShake .2s steps(2) infinite; }
+    @keyframes alienFlick {
+      0% { opacity: 1; } 8% { opacity: .15; } 14% { opacity: 1; } 30% { opacity: .3; } 37% { opacity: 1; } 52% { opacity: .1; }
+      58% { opacity: 1; } 71% { opacity: .35; } 79% { opacity: 1; } 92% { opacity: .2; } 96% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+    @keyframes alienShake { 0% { transform: translate(-4px, 2px) scale(1.04); } 100% { transform: translate(4px, -2px) scale(1.06); } }
+    @media (prefers-reduced-motion: reduce) { #alienFlash.on { animation: alienStill 2s steps(1) forwards; } #alienFlash.on img { animation: none; }
+      @keyframes alienStill { 0% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } } }
+
     /* ---------- Pausa ---------- */
     .vol { display: flex; align-items: center; gap: var(--sp-3); }
     .vol input { width: 150px; accent-color: var(--acc); }
@@ -230,6 +245,8 @@
   <main class="wrap">
     <div class="stage">
       <canvas id="view" aria-label="Hay algo en el maizal, vista en primera persona"></canvas>
+
+      <div id="alienFlash" aria-hidden="true"><img src="img/referencia_1.webp" alt=""></div>
 
       <div id="menu" class="panel full menu">
         <div id="menuEyes"></div>

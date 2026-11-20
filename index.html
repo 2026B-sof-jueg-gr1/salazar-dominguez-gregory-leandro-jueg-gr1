@@ -4,429 +4,638 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hay algo en el maizal</title>
-  <meta name="description" content="Laberinto de maíz en primera persona. Impostores. Decisiones. Escape.">
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <link rel="icon" href="img/ovni.svg" type="image/svg+xml">
+  <link rel="icon" href="img/ovni-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="img/ovni-180.png">
+  <meta name="description" content="Terror en primera persona, en tu navegador. Una noche, cuatro amigos y algo que copia sus caras.">
+  <meta name="theme-color" content="#04070c">
+  <meta property="og:title" content="Hay algo en el maizal">
+  <meta property="og:description" content="Una noche, cuatro amigos y algo que copia sus caras.">
+  <meta property="og:image" content="img/maizal.webp">
+  <link rel="preload" href="fonts/silkscreen-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="img/maizal.webp" as="image">
   <style>
+    @font-face { font-family: "Silkscreen"; src: url("fonts/silkscreen-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Atkinson Hyperlegible"; src: url("fonts/atkinson-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Atkinson Hyperlegible"; src: url("fonts/atkinson-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+
+    /* ---------- Tokens: los mismos del juego ---------- */
     :root {
-      --bg: #03070e;
-      --bg2: #071018;
-      --green: #7dff9b;
-      --green-dim: #3a8f4e;
-      --red: #ff3a4a;
-      --text: #c8d4e0;
-      --muted: #5a6b7a;
-      --border: #1a2a38;
+      --bg: #04070c; --bg-2: #08101a; --panel: rgba(7, 11, 19, .9);
+      --line: #2a3d57; --line-hi: #4d6b8f;
+      --fg: #e8eef7; --dim: #9aabc2; --mute: #5d6e86;
+      --acc: #b9f66d; --acc-2: #6dff9a; --gold: #ffe08a; --danger: #ff5b68;
+      --font-pixel: "Silkscreen", "Courier New", monospace;
+      --font-text: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+      --ease-out: cubic-bezier(.23, 1, .32, 1);
+      --ease-in-out: cubic-bezier(.77, 0, .175, 1);
+      --gutter: clamp(16px, 4vw, 48px);
+      --shadow-px: 4px 4px 0 #000;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Courier New", Courier, monospace;
-      line-height: 1.5;
-      overflow-x: hidden;
-      cursor: none;
-    }
+    html { background: var(--bg); color-scheme: dark; }
+    body { background: var(--bg); color: var(--fg); font-family: var(--font-text); font-size: 17px; line-height: 1.55; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+    img { display: block; max-width: 100%; }
     a { color: inherit; text-decoration: none; }
-    img, canvas { display: block; max-width: 100%; }
+    .px { image-rendering: pixelated; image-rendering: crisp-edges; }
+    .wrap { width: min(100%, 1180px); margin: 0 auto; padding: 0 var(--gutter); }
+    :focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
 
-    /* Custom cursor */
-    #cursor {
-      position: fixed; width: 28px; height: 18px; pointer-events: none; z-index: 9999;
-      transform: translate(-50%, -50%); mix-blend-mode: screen;
-    }
-    #cursor .saucer {
-      width: 100%; height: 10px; background: linear-gradient(180deg, #a8e0ff 0%, #4a8cff 40%, #1a3a6a 100%);
-      border-radius: 50% 50% 40% 40%; position: relative;
-      box-shadow: 0 0 12px #4a8cff, 0 0 4px #fff;
-    }
-    #cursor .dome {
-      position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-      width: 12px; height: 8px; background: radial-gradient(circle at 40% 30%, #e8f4ff, #6ab0ff 70%);
-      border-radius: 50% 50% 40% 40%; box-shadow: 0 0 8px #7dff9b;
-    }
-    #cursor .beam {
-      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-      width: 2px; height: 0; background: linear-gradient(to bottom, rgba(125,255,155,.6), transparent);
-      transition: height .15s;
-    }
-    body:hover #cursor .beam { height: 18px; }
+    /* ---------- Capa CRT: líneas y grano, encima de todo ---------- */
+    .crt { position: fixed; inset: 0; pointer-events: none; z-index: 90;
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.16) 2px 3px); }
+    .grain { position: fixed; inset: -50%; pointer-events: none; z-index: 91; opacity: .07;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      animation: grain .5s steps(4) infinite; }
+    @keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } 100% { transform: translate(0, 0); } }
 
-    /* Particles canvas */
-    #particles {
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    }
+    /* ---------- Tipos ---------- */
+    .label { font-family: var(--font-pixel); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--acc); }
+    .h2 { font-family: var(--font-pixel); font-weight: 400; font-size: clamp(30px, 5vw, 54px); line-height: 1.05; letter-spacing: .02em; text-transform: uppercase; }
+    .lead { font-size: clamp(17px, 1.6vw, 20px); color: var(--dim); max-width: 34ch; }
 
-    /* Layout */
-    .wrap { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; padding: 0 24px; }
-    section { padding: 100px 0; position: relative; }
-
-    /* Hero */
-    .hero {
-      min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
-      text-align: center; padding-top: 40px;
-    }
-    .hero-tag {
-      font-size: 11px; letter-spacing: .45em; color: var(--muted); text-transform: uppercase;
-      margin-bottom: 28px; opacity: 0;
-    }
-    .hero h1 {
-      font-size: clamp(28px, 7vw, 56px); font-weight: 700; letter-spacing: .08em;
-      line-height: 1.1; color: #e8f5d8;
-      text-shadow: 0 0 40px rgba(125,255,155,.25), 0 0 80px rgba(60,140,80,.15);
-      margin-bottom: 18px; opacity: 0;
-    }
-    .hero h1 span { color: var(--green); }
-    .hero-sub {
-      font-size: clamp(13px, 2vw, 16px); color: var(--muted); max-width: 420px;
-      margin: 0 auto 40px; opacity: 0;
-    }
-    .cta {
-      display: inline-flex; align-items: center; gap: 10px;
-      padding: 14px 32px; font-size: 13px; letter-spacing: .35em; text-transform: uppercase;
-      color: #0a120e; background: var(--green); border: none; border-radius: 2px;
-      cursor: none; position: relative; overflow: hidden;
-      box-shadow: 0 0 24px rgba(125,255,155,.35); transition: box-shadow .3s, transform .2s;
-      opacity: 0;
-    }
-    .cta::before {
-      content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
-      transform: translateX(-100%); transition: transform .5s;
-    }
-    .cta:hover { box-shadow: 0 0 40px rgba(125,255,155,.55); transform: translateY(-1px); }
-    .cta:hover::before { transform: translateX(100%); }
-    .cta-secondary {
-      display: inline-block; margin-top: 18px; font-size: 12px; letter-spacing: .2em;
-      color: var(--muted); opacity: 0; transition: color .2s;
-    }
-    .cta-secondary:hover { color: var(--green); }
-
-    /* Scanline overlay */
-    .scan {
-      position: fixed; inset: 0; pointer-events: none; z-index: 50;
-      background: repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.04) 3px 4px);
-    }
-    .vignette {
-      position: fixed; inset: 0; pointer-events: none; z-index: 40;
-      background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.65) 100%);
+    /* ---------- Botones: pixel art, se hunden al presionar ---------- */
+    .btn { --bc: var(--acc); display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 26px;
+      font-family: var(--font-pixel); font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: #06100a; background: var(--bc);
+      border: 2px solid #000; box-shadow: var(--shadow-px), inset -3px -3px 0 rgba(0,0,0,.25), inset 3px 3px 0 rgba(255,255,255,.35);
+      cursor: pointer; transition: transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out), filter 140ms ease; }
+    .btn:active { transform: translate(4px, 4px); box-shadow: 0 0 0 #000, inset -3px -3px 0 rgba(0,0,0,.25), inset 3px 3px 0 rgba(255,255,255,.35); }
+    .btn-ghost { --bc: transparent; color: var(--fg); border-color: var(--line-hi); box-shadow: var(--shadow-px); background: rgba(4,7,12,.55); }
+    .btn .arrow { display: inline-block; transition: transform 200ms var(--ease-out); }
+    @media (hover: hover) and (pointer: fine) {
+      .btn:hover { filter: brightness(1.08); transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #000, inset -3px -3px 0 rgba(0,0,0,.25), inset 3px 3px 0 rgba(255,255,255,.35); }
+      .btn-ghost:hover { border-color: var(--acc); color: var(--acc); }
+      .btn:hover .arrow { transform: translateY(3px); }
+      .btn:active { transform: translate(4px, 4px); box-shadow: 0 0 0 #000; }
     }
 
-    /* Features */
-    .features { border-top: 1px solid var(--border); }
-    .section-label {
-      font-size: 11px; letter-spacing: .4em; color: var(--green-dim); text-transform: uppercase;
-      margin-bottom: 48px;
-    }
-    .feat-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 32px;
-    }
-    .feat {
-      padding: 24px 0; border-top: 1px solid var(--border); opacity: 0; transform: translateY(24px);
-    }
-    .feat-num { font-size: 11px; color: var(--green-dim); letter-spacing: .15em; margin-bottom: 10px; }
-    .feat h3 { font-size: 15px; color: #e0ecd0; margin-bottom: 8px; letter-spacing: .04em; }
-    .feat p { font-size: 13px; color: var(--muted); line-height: 1.55; }
+    /* =========================== HERO =========================== */
+    .hero { position: relative; min-height: 100svh; display: grid; place-items: center; overflow: hidden; isolation: isolate; }
+    .hero-art, .hero-lit { position: absolute; inset: 0; z-index: -2; }
+    .hero-art img, .hero-lit img { width: 100%; height: 100%; object-fit: cover; }
+    .hero-art img { filter: brightness(.32) saturate(.75) hue-rotate(-8deg); }
+    /* lo que ilumina la nave: la misma imagen, más clara, y lo que se esconde en el maíz */
+    .hero-lit { z-index: -1; --mx: 50%; --my: 55%; --r: clamp(120px, 16vw, 220px);
+      -webkit-mask-image: radial-gradient(circle at var(--mx) var(--my), #000 0 calc(var(--r) * .62), rgba(0,0,0,.62) calc(var(--r) * .62) calc(var(--r) * .8), rgba(0,0,0,.3) calc(var(--r) * .8) var(--r), transparent var(--r));
+              mask-image: radial-gradient(circle at var(--mx) var(--my), #000 0 calc(var(--r) * .62), rgba(0,0,0,.62) calc(var(--r) * .62) calc(var(--r) * .8), rgba(0,0,0,.3) calc(var(--r) * .8) var(--r), transparent var(--r)); }
+    .hero-lit img { filter: brightness(1.15) saturate(1.1) sepia(.25) hue-rotate(55deg); }
+    .hero-lit::after { content: ""; position: absolute; inset: 0; background: rgba(110, 255, 150, .14); mix-blend-mode: screen; }
+    .eyes { position: absolute; width: 1.9vw; min-width: 16px; aspect-ratio: 5 / 1; display: flex; justify-content: space-between; }
+    .eyes i { width: 22%; aspect-ratio: 1; background: var(--danger); box-shadow: 0 0 10px 2px rgba(255, 60, 70, .8); animation: blink 4.2s steps(1) infinite; animation-delay: var(--d, 0s); }
+    @keyframes blink { 0%, 46%, 50%, 100% { transform: scaleY(1); } 47%, 49% { transform: scaleY(.1); } }
+    /* la nave que sigue al mouse, y su cono de luz */
+    .ufo { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; width: 96px; translate: var(--ux, 50vw) 10vh; margin-left: -48px; }
+    .ufo svg { width: 96px; height: auto; display: block; animation: hover 2.4s var(--ease-in-out) infinite alternate; filter: drop-shadow(0 0 14px rgba(109, 255, 154, .6)); }
+    @keyframes hover { to { transform: translateY(8px); } }
+    .ufo-lights rect { animation: lights .9s steps(1) infinite; }
+    .ufo-lights rect:nth-child(2) { animation-delay: .3s; } .ufo-lights rect:nth-child(3) { animation-delay: .6s; }
+    @keyframes lights { 0%, 66% { fill: #6dff9a; } 67%, 100% { fill: #1c4a2a; } }
+    .beam { position: absolute; z-index: 0; pointer-events: none; left: 0; top: 0; width: 100%; height: 100%;
+      background: linear-gradient(to bottom, rgba(140, 255, 170, .24), rgba(140, 255, 170, .05));
+      clip-path: polygon(calc(var(--bx, 50%) - 22px) calc(10vh + 34px), calc(var(--bx, 50%) + 22px) calc(10vh + 34px), calc(var(--mx2, 50%) + var(--rb, 160px)) var(--my2, 60%), calc(var(--mx2, 50%) - var(--rb, 160px)) var(--my2, 60%));
+      animation: beam 3s ease-in-out infinite; }
+    @keyframes beam { 50% { opacity: .7; } }
 
-    /* About */
-    .about { border-top: 1px solid var(--border); }
-    .about-text {
-      font-size: clamp(15px, 2.2vw, 18px); color: #a8b8c8; max-width: 540px;
-      line-height: 1.7; opacity: 0;
-    }
-    .about-meta {
-      display: flex; flex-wrap: wrap; gap: 24px 40px; margin-top: 40px; opacity: 0;
-    }
-    .meta-item span { display: block; font-size: 11px; letter-spacing: .2em; color: var(--muted); margin-bottom: 4px; }
-    .meta-item strong { font-size: 14px; color: var(--green); font-weight: 400; }
+    .hero-in { position: relative; z-index: 2; width: 100%; text-align: center; padding: 18vh var(--gutter) 12vh; display: grid; justify-items: center; gap: 22px; }
+    .hero h1 { font-family: var(--font-pixel); font-weight: 400; text-transform: uppercase; line-height: .95; letter-spacing: .02em;
+      font-size: clamp(42px, 9.4vw, 132px); color: var(--fg); text-shadow: 0 0 40px rgba(109, 255, 154, .25), 6px 6px 0 #000; }
+    .hero h1 .l2 { display: block; color: var(--acc); }
+    .hero h1 .ch { display: inline-block; }
+    /* una señal mala: los colores se separan un instante */
+    .glitch.go { animation: rgb .34s steps(3) 1; }
+    @keyframes rgb {
+      0% { text-shadow: -5px 0 #ff3a6a, 5px 0 #3affd2, 6px 6px 0 #000; translate: 3px 0; }
+      50% { text-shadow: 4px 0 #ff3a6a, -4px 0 #3affd2, 6px 6px 0 #000; translate: -3px 0; }
+      100% { text-shadow: 0 0 40px rgba(109, 255, 154, .25), 6px 6px 0 #000; translate: 0 0; } }
+    .hero .lead { margin: 0 auto; text-align: center; color: #c9d5e4; text-shadow: 2px 2px 0 #000; max-width: 30ch; }
+    .hero-cta { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 8px; }
+    .facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin-top: 10px; font-family: var(--font-pixel); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+    .facts li { list-style: none; display: flex; align-items: center; gap: 22px; }
+    .facts li + li::before { content: ""; width: 6px; height: 6px; background: var(--acc); }
+    .hint { position: absolute; bottom: 22px; left: 50%; translate: -50% 0; z-index: 2; font-family: var(--font-pixel); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
 
-    /* Controls */
-    .controls { border-top: 1px solid var(--border); }
-    .ctrl-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px;
-    }
-    .ctrl {
-      padding: 16px; background: var(--bg2); border: 1px solid var(--border);
-      font-size: 12px; opacity: 0; transform: translateY(16px);
-    }
-    .ctrl kbd {
-      display: inline-block; min-width: 22px; padding: 2px 6px; margin-right: 6px;
-      border: 1px solid var(--border); border-radius: 2px; font-size: 11px; color: var(--green);
-      background: #0a1520;
-    }
+    /* entrada del hero: una sola vez */
+    [data-enter] { opacity: 0; transform: translateY(14px); }
+    .ready [data-enter] { animation: enter 700ms var(--ease-out) both; animation-delay: var(--dl, 0ms); }
+    @keyframes enter { to { opacity: 1; transform: none; } }
 
-    /* Final CTA */
-    .final {
-      text-align: center; border-top: 1px solid var(--border); padding-bottom: 120px;
-    }
-    .final h2 {
-      font-size: clamp(22px, 4vw, 32px); letter-spacing: .12em; color: #d8e8c8;
-      margin-bottom: 16px; opacity: 0;
-    }
-    .final p { color: var(--muted); font-size: 14px; margin-bottom: 36px; opacity: 0; }
+    /* =========================== NIVELES (momento: la pantalla se pixela al cambiar) =========================== */
+    .levels { position: relative; height: 420vh; border-top: 2px solid #000; background: linear-gradient(var(--bg), var(--bg-2)); }
+    .levels-stick { position: sticky; top: 0; height: 100svh; display: grid; align-items: center; overflow: hidden; }
+    .levels-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 5vw, 72px); align-items: center; }
+    .levels-head { display: grid; gap: 14px; margin-bottom: 34px; }
+    .levels-head .h2 { font-size: clamp(28px, 3.3vw, 46px); }
+    .lv-list { list-style: none; display: grid; gap: 6px; }
+    .lv { display: grid; grid-template-columns: 54px 1fr; gap: 0 14px; padding: 14px 16px; border: 2px solid transparent; color: var(--mute);
+      transition: color 250ms ease, border-color 250ms ease, background-color 250ms ease; cursor: pointer; }
+    .lv .n { font-family: var(--font-pixel); font-size: 22px; line-height: 1.1; }
+    .lv h3 { font-family: var(--font-pixel); font-weight: 400; font-size: 20px; text-transform: uppercase; letter-spacing: .04em; line-height: 1.2; }
+    .lv p { grid-column: 2; font-size: 16px; color: var(--dim); max-height: 0; opacity: 0; overflow: hidden; transition: max-height 380ms var(--ease-out), opacity 300ms ease, margin 380ms var(--ease-out); }
+    .lv.on { color: var(--fg); border-color: var(--line); background: var(--panel); box-shadow: var(--shadow-px); }
+    .lv.on .n { color: var(--acc); }
+    .lv.on p { max-height: 90px; opacity: 1; margin-top: 6px; }
+    .screen { position: relative; border: 2px solid #000; box-shadow: 0 0 0 2px var(--line), 10px 10px 0 #000, 0 0 80px rgba(109, 255, 154, .12); background: #000; aspect-ratio: 16 / 10; }
+    .screen canvas { width: 100%; height: 100%; display: block; }
+    .screen::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(to bottom, rgba(255,255,255,.035) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55)); }
+    .screen-tag { position: absolute; top: 12px; left: 12px; z-index: 2; font-family: var(--font-pixel); font-size: 12px; letter-spacing: .12em; padding: 4px 8px; background: #000; color: var(--danger); }
+    .screen-tag::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; background: var(--danger); animation: rec 1s steps(1) infinite; }
+    @keyframes rec { 50% { opacity: 0; } }
+    .progress { display: flex; gap: 6px; margin-top: 18px; }
+    .progress i { flex: 1; height: 6px; background: var(--line); }
+    .progress i b { display: block; height: 100%; width: calc(var(--p, 0) * 100%); background: var(--acc); }
 
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--border); padding: 28px 0; text-align: center;
-      font-size: 11px; color: var(--muted); letter-spacing: .15em;
+    /* =========================== ¿CUÁL ES PEPE? (momento jugable) =========================== */
+    .who { position: relative; padding: clamp(90px, 14vh, 150px) 0; text-align: center; overflow: hidden; border-top: 2px solid #000;
+      background: radial-gradient(ellipse 60% 55% at 50% 62%, rgba(109, 255, 154, .14), transparent 70%), var(--bg); }
+    .who .lead { margin: 14px auto 0; text-align: center; }
+    .stage { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: clamp(40px, 12vw, 160px); margin-top: 54px; min-height: 290px; }
+    .pepe { position: relative; display: grid; justify-items: center; gap: 18px; background: none; border: 0; color: inherit; cursor: crosshair; padding: 10px 14px 0; font: inherit; }
+    .pepe img { height: clamp(180px, 26vw, 250px); width: auto; filter: drop-shadow(6px 6px 0 rgba(0,0,0,.6)); transition: transform 200ms var(--ease-out); }
+    .pepe .tag { font-family: var(--font-pixel); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; padding: 6px 12px; border: 2px solid var(--line-hi); background: var(--panel); box-shadow: var(--shadow-px); transition: border-color 160ms ease, color 160ms ease; }
+    .pepe::before { content: ""; position: absolute; left: 50%; top: 28%; width: 46px; height: 46px; translate: -50% -50%; opacity: 0; pointer-events: none;
+      background: conic-gradient(from 0deg, transparent 0 20%, var(--danger) 20% 30%, transparent 30% 45%, var(--danger) 45% 55%, transparent 55% 70%, var(--danger) 70% 80%, transparent 80%);
+      -webkit-mask: radial-gradient(circle, transparent 0 9px, #000 10px 12px, transparent 13px 17px, #000 18px 20px, transparent 21px); mask: radial-gradient(circle, transparent 0 9px, #000 10px 12px, transparent 13px 17px, #000 18px 20px, transparent 21px);
+      transition: opacity 150ms ease, scale 200ms var(--ease-out); scale: 1.3; }
+    @media (hover: hover) and (pointer: fine) {
+      .pepe:hover::before { opacity: 1; scale: 1; }
+      .pepe:hover .tag { border-color: var(--danger); color: var(--danger); }
     }
+    .pepe:active img { transform: translateY(3px); }
+    .stage.done .pepe { pointer-events: none; }
+    .pepe.flee img { animation: flee 1.4s var(--ease-in-out) forwards; }
+    @keyframes flee { 0% { transform: none; opacity: 1; } 30% { transform: translateY(-10px) scale(1.04); } 100% { transform: translateY(-60vh) scale(.6); opacity: 0; } }
+    .pepe.down img { animation: down .7s var(--ease-out) forwards; }
+    @keyframes down { to { transform: rotate(-88deg) translate(-40px, 20px); filter: brightness(.5) drop-shadow(6px 6px 0 rgba(0,0,0,.6)); } }
+    .who-beam { position: absolute; left: 50%; bottom: 0; width: 160px; height: 120%; translate: -50% 0; pointer-events: none; opacity: 0;
+      background: linear-gradient(to top, rgba(140,255,170,.35), rgba(140,255,170,0)); clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%); }
+    .flash { position: fixed; inset: 0; z-index: 80; pointer-events: none; opacity: 0; background: #fff; }
+    .verdict { min-height: 96px; margin-top: 34px; display: grid; justify-items: center; gap: 16px; }
+    .verdict p { font-family: var(--font-pixel); font-size: clamp(18px, 2.4vw, 26px); text-transform: uppercase; letter-spacing: .04em; }
+    .verdict .good { color: var(--acc); } .verdict .bad { color: var(--danger); }
+    .verdict > * { animation: enter 450ms var(--ease-out) both; }
+    .verdict > *:nth-child(2) { animation-delay: 140ms; }
+    .shake { animation: shake .35s steps(6) 1; }
+    @keyframes shake { 0%, 100% { translate: 0 0; } 20% { translate: -8px 4px; } 40% { translate: 7px -5px; } 60% { translate: -5px -3px; } 80% { translate: 4px 5px; } }
 
-    /* Eyes decoration */
-    .eyes {
-      position: absolute; width: 22px; height: 5px; opacity: 0; pointer-events: none;
-    }
-    .eyes::before, .eyes::after {
-      content: ""; position: absolute; top: 0; width: 4px; height: 4px; border-radius: 50%;
-      background: var(--red); box-shadow: 0 0 10px 2px var(--red);
-    }
-    .eyes::before { left: 0; }
-    .eyes::after { right: 0; }
+    /* =========================== CONTROLES =========================== */
+    .how { padding: clamp(80px, 12vh, 130px) 0; border-top: 2px solid #000; background: var(--bg-2); }
+    .how-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: clamp(24px, 5vw, 72px); align-items: center; }
+    .keys { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .key { display: grid; gap: 12px; padding: 18px; border: 2px solid var(--line); background: var(--panel); box-shadow: var(--shadow-px); }
+    .key span { font-size: 16px; color: var(--dim); }
+    .kb { display: flex; gap: 6px; flex-wrap: wrap; }
+    kbd { font-family: var(--font-pixel); font-size: 14px; min-width: 34px; height: 34px; padding: 0 8px; display: inline-grid; place-items: center; color: var(--fg);
+      background: #0e1826; border: 2px solid var(--line-hi); box-shadow: inset 0 -4px 0 #05090f; }
 
-    @media (max-width: 600px) {
-      section { padding: 72px 0; }
-      .feat-grid { gap: 20px; }
+    /* =========================== CIERRE =========================== */
+    .end { position: relative; min-height: 88svh; display: grid; place-items: center; text-align: center; overflow: hidden; border-top: 2px solid #000; isolation: isolate; }
+    .end img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; filter: brightness(.55); }
+    .end::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, var(--bg) 0, rgba(4,7,12,.2) 35%, rgba(4,7,12,.35) 70%, var(--bg) 100%); }
+    .end-in { display: grid; justify-items: center; gap: 26px; padding: 0 var(--gutter); }
+    .end .h2 { font-size: clamp(36px, 7vw, 92px); text-shadow: 6px 6px 0 #000; }
+    .end .h2 em { font-style: normal; color: var(--acc); }
+    footer { border-top: 2px solid #000; padding: 26px 0; font-family: var(--font-pixel); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--mute); }
+    footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+
+    /* =========================== PARA QUIÉN · PRIVACIDAD =========================== */
+    .facts .age { color: var(--fg); }
+    .facts .age b { font-weight: 400; padding: 3px 8px; background: var(--danger); color: #12060a; box-shadow: 2px 2px 0 #000; }
+    .trust { padding: clamp(80px, 12vh, 130px) 0; border-top: 2px solid #000; }
+    .trust-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 3vw, 32px); }
+    .card { display: grid; align-content: start; gap: 16px; padding: clamp(22px, 3vw, 34px); border: 2px solid var(--line); background: var(--panel); box-shadow: 6px 6px 0 #000; }
+    .card h3 { font-family: var(--font-pixel); font-weight: 400; font-size: clamp(20px, 2.2vw, 26px); text-transform: uppercase; letter-spacing: .03em; line-height: 1.15; }
+    .card p { color: var(--dim); max-width: 44ch; }
+    .rate { display: flex; align-items: center; gap: 20px; }
+    .rate-badge { flex: none; width: 84px; height: 100px; display: grid; grid-template-rows: 1fr auto; text-align: center; border: 3px solid #000; background: var(--danger); color: #fff;
+      box-shadow: 4px 4px 0 #000, inset -4px -4px 0 rgba(0,0,0,.22), inset 4px 4px 0 rgba(255,255,255,.25); font-family: var(--font-pixel); }
+    .rate-badge strong { font-weight: 400; font-size: 46px; line-height: 1; display: grid; place-items: center; text-shadow: 3px 3px 0 #000; }
+    .rate-badge span { font-size: 11px; letter-spacing: .1em; padding: 4px 0 5px; background: #000; }
+    .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+    .chips li { font-family: var(--font-pixel); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; padding: 5px 10px; border: 2px solid var(--line-hi); color: var(--fg); }
+    .ticks { list-style: none; display: grid; gap: 10px; }
+    .ticks li { display: flex; align-items: center; gap: 12px; color: var(--fg); }
+    .ticks li::before { content: ""; flex: none; width: 12px; height: 12px; background: var(--acc); box-shadow: 2px 2px 0 #000; }
+    .link { justify-self: start; font-family: var(--font-pixel); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--acc); background: none; border: 0; cursor: pointer; padding: 6px 0;
+      background-image: linear-gradient(currentColor, currentColor); background-size: 0 2px; background-position: 0 100%; background-repeat: no-repeat; transition: background-size 220ms var(--ease-out); }
+    @media (hover: hover) and (pointer: fine) { .link:hover { background-size: 100% 2px; } }
+    footer button.link { font-size: 11px; padding: 0; color: var(--dim); }
+
+    /* La política: una ventana sobre la página */
+    dialog.policy { margin: auto; width: min(640px, calc(100% - 32px)); max-height: min(82svh, 760px); padding: 0; color: var(--fg); background: var(--bg-2);
+      border: 2px solid var(--line-hi); box-shadow: 10px 10px 0 #000; opacity: 0; transform: translateY(10px) scale(.98);
+      transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out), overlay 240ms allow-discrete, display 240ms allow-discrete; }
+    dialog.policy[open] { opacity: 1; transform: none; }
+    @starting-style { dialog.policy[open] { opacity: 0; transform: translateY(10px) scale(.98); } }
+    dialog.policy::backdrop { background: rgba(2, 4, 8, .78); }
+    .policy-in { display: grid; gap: 20px; padding: clamp(22px, 4vw, 36px); overflow: auto; max-height: inherit; }
+    .policy-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+    .policy h2 { font-family: var(--font-pixel); font-weight: 400; font-size: clamp(22px, 3vw, 30px); text-transform: uppercase; line-height: 1.1; }
+    .policy .date { font-size: 14px; color: var(--mute); margin-top: 6px; }
+    .policy h3 { font-family: var(--font-pixel); font-weight: 400; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--acc); margin-bottom: 4px; }
+    .policy p { color: var(--dim); font-size: 16px; }
+    .policy code { font-size: 14px; color: var(--fg); background: #0e1826; padding: 1px 6px; border: 1px solid var(--line); }
+    .x { flex: none; width: 40px; height: 40px; display: grid; place-items: center; font-family: var(--font-pixel); font-size: 16px; color: var(--fg); background: #0e1826;
+      border: 2px solid var(--line-hi); box-shadow: 3px 3px 0 #000; cursor: pointer; transition: transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out); }
+    .x:active { transform: translate(3px, 3px); box-shadow: 0 0 0 #000; }
+
+    /* Sonido: un botón fijo, abajo a la derecha */
+    .sound { position: fixed; right: 16px; bottom: 16px; z-index: 95; display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px;
+      font-family: var(--font-pixel); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg); background: var(--panel);
+      border: 2px solid var(--line-hi); box-shadow: var(--shadow-px); cursor: pointer; transition: transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out), border-color 160ms ease, color 160ms ease; }
+    .sound:active { transform: translate(4px, 4px); box-shadow: 0 0 0 #000; }
+    .sound .bars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+    .sound .bars i { width: 3px; height: 30%; background: currentColor; }
+    .sound.on { color: var(--acc); border-color: var(--acc); }
+    .sound.on .bars i { animation: eq .9s steps(4) infinite; }
+    .sound.on .bars i:nth-child(2) { animation-delay: -.3s; } .sound.on .bars i:nth-child(3) { animation-delay: -.6s; }
+    @keyframes eq { 0%, 100% { height: 30%; } 50% { height: 100%; } }
+    .sound.ask { animation: ask 1.6s ease-in-out infinite; }
+    @keyframes ask { 50% { border-color: var(--acc); } }
+    @media (prefers-reduced-motion: reduce) { .sound.on .bars i, .sound.ask { animation: none; } .sound.on .bars i { height: 70%; } }
+
+
+    /* aparición al hacer scroll: un barrido de píxeles, una vez por bloque */
+    [data-reveal] { clip-path: inset(0 0 100% 0); }
+    [data-reveal].in { clip-path: inset(0 0 0 0); transition: clip-path 640ms steps(8); transition-delay: var(--dl, 0ms); }
+
+    @media (hover: none) { .hint { display: none; } }
+    @media (max-width: 860px) {
+      .levels-grid { grid-template-columns: 1fr; gap: 18px; }
+      .levels-head { margin-bottom: 8px; gap: 8px; }
+      .levels-head .lead { display: none; }
+      .levels-grid .screen { order: -1; }
+      .lv { padding: 10px 12px; grid-template-columns: 40px 1fr; }
+      .lv:not(.on) { display: none; }
+      .lv .n { font-size: 18px; } .lv h3 { font-size: 17px; }
+      .how-grid { grid-template-columns: 1fr; }
+      .keys { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ufo { display: none; } .beam { display: none; }
+      .trust-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px) { .hero-cta .btn { width: 100%; } .keys { gap: 10px; } .key { padding: 14px; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .grain, .ufo svg, .eyes i, .beam, .screen-tag::before { animation: none; }
+      .ready [data-enter] { animation: fade 300ms ease both; animation-delay: 0ms; }
+      @keyframes fade { from { opacity: 0; } to { opacity: 1; transform: none; } }
+      [data-reveal] { clip-path: none; }
+      .pepe.flee img, .pepe.down img { animation-duration: .01s; }
+      dialog.policy { transition: opacity 150ms ease; transform: none; }
+      .shake { animation: none; }
     }
   </style>
 </head>
 <body>
-  <div class="scan"></div>
-  <div class="vignette"></div>
-  <canvas id="particles"></canvas>
-  <div id="cursor"><div class="saucer"><div class="dome"></div><div class="beam"></div></div></div>
+  <div class="crt" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="flash" aria-hidden="true"></div>
 
   <main>
-    <!-- HERO -->
-    <section class="hero">
+    <!-- HERO: el maizal a oscuras; la nave ilumina lo que se esconde -->
+    <section class="hero" id="top">
+      <div class="hero-art" aria-hidden="true"><img class="px" src="img/maizal.webp" alt=""></div>
+      <div class="hero-lit" aria-hidden="true">
+        <img class="px" src="img/maizal.webp" alt="">
+        <span class="eyes" style="left:14%;top:44%;--d:.4s"><i></i><i></i></span>
+        <span class="eyes" style="left:31%;top:58%;--d:1.9s"><i></i><i></i></span>
+        <span class="eyes" style="left:63%;top:51%;--d:1.1s"><i></i><i></i></span>
+        <span class="eyes" style="left:82%;top:40%;--d:2.7s"><i></i><i></i></span>
+        <span class="eyes" style="left:48%;top:66%;--d:3.3s"><i></i><i></i></span>
+        <span class="eyes" style="left:90%;top:68%;--d:.8s"><i></i><i></i></span>
+      </div>
+      <div class="beam" aria-hidden="true"></div>
+      <div class="ufo" aria-hidden="true">
+        <svg viewBox="0 0 32 13" shape-rendering="crispEdges">
+          <rect x="12" y="0" width="8" height="1" fill="#bfe9ff"/><rect x="10" y="1" width="12" height="3" fill="#8fd3ff"/><rect x="12" y="1" width="3" height="1" fill="#e9f8ff"/>
+          <rect x="4" y="4" width="24" height="2" fill="#9aa8b8"/><rect x="0" y="6" width="32" height="3" fill="#c6d0dc"/><rect x="0" y="8" width="32" height="1" fill="#6c7888"/>
+          <rect x="4" y="9" width="24" height="2" fill="#4a5564"/><rect x="11" y="11" width="10" height="2" fill="#6dff9a"/>
+          <g class="ufo-lights"><rect x="5" y="7" width="2" height="1"/><rect x="15" y="7" width="2" height="1"/><rect x="25" y="7" width="2" height="1"/></g>
+        </svg>
+      </div>
+
+      <div class="hero-in">
+        <p class="label" data-enter style="--dl:0ms">Terror en primera persona · En tu navegador</p>
+        <h1 class="glitch" data-enter style="--dl:80ms"><span class="l1">Hay algo</span><span class="l2">en el maizal</span></h1>
+        <p class="lead" data-enter style="--dl:220ms">Una noche. Cuatro amigos. Algo que copia sus caras.</p>
+        <div class="hero-cta" data-enter style="--dl:320ms">
+          <a class="btn" href="game.html">Jugar ahora</a>
+          <a class="btn btn-ghost" href="#niveles">Ver los niveles <span class="arrow" aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="facts" data-enter style="--dl:420ms"><li class="age" aria-label="Para mayores de 16 años"><b>16+</b></li><li>4 niveles</li><li>5 finales</li><li>Gratis</li></ul>
+      </div>
+      <p class="hint" aria-hidden="true">Mueve el mouse: algo te mira</p>
+    </section>
+
+    <!-- NIVELES: pantalla fija, el scroll cambia de nivel -->
+    <section class="levels" id="niveles" aria-label="Los cuatro niveles">
+      <div class="levels-stick">
+        <div class="wrap levels-grid">
+          <div>
+            <div class="levels-head">
+              <p class="label">La noche</p>
+              <h2 class="h2">Cuatro niveles.<br>Una sola noche.</h2>
+            </div>
+            <ol class="lv-list">
+              <li class="lv on" data-i="0"><span class="n">01</span><h3>El bar</h3><p>Habla con todos. Lo que te cuenten a solas te salvará.</p></li>
+              <li class="lv" data-i="1"><span class="n">02</span><h3>La carretera</h3><p>Una luz verde sigue a la camioneta.</p></li>
+              <li class="lv" data-i="2"><span class="n">03</span><h3>El maizal</h3><p>Tus amigos te llaman entre el maíz. Alguno ya no es tu amigo.</p></li>
+              <li class="lv" data-i="3"><span class="n">04</span><h3>La luz</h3><p>Hay dos Pepes. Tienes un minuto para probar que eres tú.</p></li>
+            </ol>
+            <div class="progress" aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
+          </div>
+          <div class="screen">
+            <span class="screen-tag">REC 23:41</span>
+            <canvas id="lvCanvas" width="640" height="400" role="img" aria-label="Escena del nivel"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ¿CUÁL ES PEPE?: la mecánica del juego, en un clic -->
+    <section class="who" id="pepe">
       <div class="wrap">
-        <p class="hero-tag">Horror · Laberinto · Impostores</p>
-        <h1>HAY ALGO<br><span>EN EL MAIZAL</span></h1>
-        <p class="hero-sub">Primera persona. Linterna. Decisiones irreversibles. No todos son tus amigos.</p>
+        <p class="label" data-reveal>Pruébalo</p>
+        <h2 class="h2" data-reveal style="--dl:80ms">¿Cuál es Pepe?</h2>
+        <p class="lead" data-reveal style="--dl:160ms">Esa cosa copia caras y voces. Pero se delata un instante. Mira bien y dispara.</p>
+        <div class="stage" id="stage">
+          <div class="who-beam" aria-hidden="true"></div>
+          <button class="pepe" data-side="0" aria-label="Disparar al Pepe de la izquierda"><img class="px" src="img/pepe.webp" alt=""><span class="tag">Este</span></button>
+          <button class="pepe" data-side="1" aria-label="Disparar al Pepe de la derecha"><img class="px" src="img/pepe.webp" alt=""><span class="tag">Este</span></button>
+        </div>
+        <div class="verdict" id="verdict" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- CÓMO SE JUEGA -->
+    <section class="how" id="controles">
+      <div class="wrap how-grid">
         <div>
-          <a href="game.html" class="cta">Jugar ahora</a>
+          <p class="label" data-reveal>Controles</p>
+          <h2 class="h2" data-reveal style="--dl:80ms">Cómo se juega</h2>
         </div>
-        <a href="#features" class="cta-secondary">Descubrir →</a>
+        <ul class="keys" data-reveal style="--dl:160ms">
+          <li class="key"><div class="kb"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span>Caminar</span></li>
+          <li class="key"><div class="kb"><kbd>Mouse</kbd></div><span>Mirar</span></li>
+          <li class="key"><div class="kb"><kbd>E</kbd></div><span>Hablar</span></li>
+          <li class="key"><div class="kb"><kbd>1</kbd><kbd>6</kbd></div><span>Responder</span></li>
+          <li class="key"><div class="kb"><kbd>J</kbd></div><span>Lo que sabes</span></li>
+          <li class="key"><div class="kb"><kbd>P</kbd></div><span>Pausa</span></li>
+        </ul>
       </div>
     </section>
 
-    <!-- FEATURES -->
-    <section class="features" id="features">
-      <div class="wrap">
-        <p class="section-label">Sistema</p>
-        <div class="feat-grid">
-          <article class="feat">
-            <div class="feat-num">01</div>
-            <h3>Raycasting en vivo</h3>
-            <p>Laberinto de maíz en primera persona. Sin motores. Todo dibujado por código.</p>
-          </article>
-          <article class="feat">
-            <div class="feat-num">02</div>
-            <h3>Linterna y batería</h3>
-            <p>Cono de luz real. Busca pilas. La oscuridad te persigue.</p>
-          </article>
-          <article class="feat">
-            <div class="feat-num">03</div>
-            <h3>Impostores</h3>
-            <p>El alien copia rostros y voces. Pregunta. Decide. Un error y es el fin.</p>
-          </article>
-          <article class="feat">
-            <div class="feat-num">04</div>
-            <h3>Persecución constante</h3>
-            <p>Se mueve entre las plantas. Cuanto más tardas, más cerca está.</p>
-          </article>
-        </div>
+    <!-- PARA QUIÉN · PRIVACIDAD -->
+    <section class="trust" id="para-quien" aria-label="Para quién es y privacidad">
+      <div class="wrap trust-grid">
+        <article class="card" data-reveal>
+          <div class="rate">
+            <div class="rate-badge" aria-hidden="true"><strong>16</strong><span>AÑOS</span></div>
+            <h3>Para mayores<br>de 16 años</h3>
+          </div>
+          <p>Es un juego de terror. Hay que decidir si disparar a alguien que parece tu amigo.</p>
+          <ul class="chips" aria-label="Contiene"><li>Terror</li><li>Violencia con armas</li><li>Sangre</li><li>Alcohol</li><li>Apuestas</li></ul>
+        </article>
+        <article class="card" data-reveal style="--dl:120ms">
+          <h3>Tu privacidad</h3>
+          <ul class="ticks"><li>Sin cuentas ni registro</li><li>Sin cookies ni rastreo</li><li>Solo guardamos el volumen, en tu navegador</li></ul>
+          <button class="link" type="button" data-policy>Leer la política de privacidad</button>
+        </article>
       </div>
     </section>
 
-    <!-- ABOUT -->
-    <section class="about">
-      <div class="wrap">
-        <p class="section-label">Premisa</p>
-        <p class="about-text">
-          Cinco amigos. Un viaje nocturno. Una luz verde sobre el maizal.
-          Ahora estás solo. Ellos están perdidos. Algo los imita.
-          Sal vivo… o no salgas.
-        </p>
-        <div class="about-meta">
-          <div class="meta-item"><span>Género</span><strong>Horror · Puzzle</strong></div>
-          <div class="meta-item"><span>Perspectiva</span><strong>Primera persona</strong></div>
-          <div class="meta-item"><span>Plataforma</span><strong>Navegador</strong></div>
-          <div class="meta-item"><span>Duración</span><strong>~15–30 min</strong></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- CONTROLS -->
-    <section class="controls">
-      <div class="wrap">
-        <p class="section-label">Controles</p>
-        <div class="ctrl-grid">
-          <div class="ctrl"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Mover</div>
-          <div class="ctrl"><kbd>Mouse</kbd> Mirar</div>
-          <div class="ctrl"><kbd>F</kbd> Linterna</div>
-          <div class="ctrl"><kbd>J</kbd> Diario</div>
-          <div class="ctrl"><kbd>M</kbd> Mapa</div>
-          <div class="ctrl"><kbd>P</kbd> Pausa</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FINAL CTA -->
-    <section class="final">
-      <div class="wrap">
-        <h2>La luz verde no espera.</h2>
-        <p>Entra. Pregunta. Decide. Escapa.</p>
-        <a href="game.html" class="cta">Entrar al maizal</a>
+    <!-- CIERRE -->
+    <section class="end">
+      <img class="px" src="img/luz.webp" alt="" loading="lazy">
+      <div class="end-in">
+        <h2 class="h2" data-reveal>La luz verde<br><em>no espera.</em></h2>
+        <a class="btn" href="game.html" data-reveal style="--dl:120ms">Entrar al maizal</a>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="wrap">Hay algo en el maizal · Hecho con código puro</div>
+    <div class="wrap"><span>Hay algo en el maizal · 16+</span><button class="link" type="button" data-policy>Privacidad</button><span>Hecho a mano, píxel por píxel</span></div>
   </footer>
 
+  <button class="sound" id="sound" type="button" aria-pressed="false"><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span><span class="txt">Activar sonido</span></button>
+  <audio id="music" loop preload="auto">
+    <source src="audio/maizal_music.ogg#t=13" type='audio/ogg; codecs="opus"'>
+    <source src="audio/maizal_music.mp3#t=13" type="audio/mpeg">
+  </audio>
+
+  <dialog class="policy" id="privacidad" aria-labelledby="policyTitle">
+    <div class="policy-in">
+      <div class="policy-head">
+        <div><h2 id="policyTitle">Política de privacidad</h2><p class="date">Última actualización: 19 de noviembre de 2026</p></div>
+        <button class="x" type="button" data-close aria-label="Cerrar">X</button>
+      </div>
+      <div><h3>Qué datos recogemos</h3><p>Ninguno. No hay cuentas, formularios, cookies ni analítica. No sabemos quién juega.</p></div>
+      <div><h3>Qué se guarda en tu equipo</h3><p>Solo el volumen que eliges en el juego, con la clave <code>maizal.vol</code> en el almacenamiento local de tu navegador. Nunca sale de tu equipo.</p></div>
+      <div><h3>Servicios de terceros</h3><p>Ninguno. Las fuentes, imágenes y música se cargan desde este mismo sitio. El servidor que aloja la página puede guardar registros técnicos (dirección IP, navegador) según su propia política.</p></div>
+      <div><h3>Cómo borrarlo</h3><p>Borra los datos de este sitio desde la configuración de tu navegador. El juego vuelve al volumen inicial.</p></div>
+      <div><h3>Menores de edad</h3><p>El juego es para mayores de 16 años. No recogemos datos de nadie, tampoco de menores.</p></div>
+      <div><h3>Cambios</h3><p>Si esta política cambia, la nueva versión se publica aquí, con su fecha.</p></div>
+    </div>
+  </dialog>
+
   <script>
-    /* ============ Cursor ============ */
-    const cursor = document.getElementById("cursor");
-    let mx = 0, my = 0, cx = 0, cy = 0;
-    document.addEventListener("mousemove", e => { mx = e.clientX; my = e.clientY; });
-    function updateCursor() {
-      cx += (mx - cx) * 0.18;
-      cy += (my - cy) * 0.18;
-      cursor.style.left = cx + "px";
-      cursor.style.top = cy + "px";
-      requestAnimationFrame(updateCursor);
+  (() => {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    /* ---------- Hero: entrada y título que se decodifica ---------- */
+    const h1 = $(".hero h1");
+    const GLYPHS = "#%&@$*+=?!<>/\\01";
+    function decode(el, delay) {
+      const full = el.textContent; el.textContent = "";
+      const spans = [...full].map(c => {                     // los espacios quedan como texto: el título puede partirse
+        if (c === " ") { el.appendChild(document.createTextNode(" ")); return { c }; }
+        const s = document.createElement("span"); s.className = "ch"; s.textContent = c; el.appendChild(s); return { s, c };
+      });
+      if (reduce) return;
+      spans.forEach((o, i) => {
+        if (o.c === " ") return;
+        const start = delay + i * 38 + (i % 3) * 12, end = start + 260 + Math.random() * 160;
+        const t0 = performance.now();
+        const tick = now => {
+          const t = now - t0;
+          if (t < start) { o.s.style.opacity = 0; requestAnimationFrame(tick); return; }
+          o.s.style.opacity = 1;
+          if (t < end) { o.s.textContent = GLYPHS[(Math.random() * GLYPHS.length) | 0]; requestAnimationFrame(tick); }
+          else o.s.textContent = o.c;
+        };
+        requestAnimationFrame(tick);
+      });
     }
-    updateCursor();
+    decode($(".hero h1 .l1"), 200); decode($(".hero h1 .l2"), 520);
+    requestAnimationFrame(() => document.body.classList.add("ready"));
+    // de vez en cuando, el título falla como una señal mala
+    if (!reduce) setInterval(() => { h1.classList.remove("go"); void h1.offsetWidth; h1.classList.add("go"); }, 4600);
 
-    /* ============ Particles ============ */
-    const canvas = document.getElementById("particles");
-    const ctx = canvas.getContext("2d");
-    let W, H, particles = [];
-    const COLORS = ["#7dff9b", "#4a8cff", "#c0d0e0", "#ff3a4a"];
-
-    function resize() {
-      W = canvas.width = window.innerWidth;
-      H = canvas.height = window.innerHeight;
-    }
-    window.addEventListener("resize", resize);
-    resize();
-
-    function spawn(n = 60) {
-      particles = [];
-      for (let i = 0; i < n; i++) {
-        particles.push({
-          x: Math.random() * W,
-          y: Math.random() * H,
-          r: Math.random() * 1.4 + 0.3,
-          vx: (Math.random() - 0.5) * 0.25,
-          vy: (Math.random() - 0.5) * 0.15,
-          a: Math.random() * 0.5 + 0.15,
-          c: COLORS[Math.floor(Math.random() * COLORS.length)],
-          pulse: Math.random() * Math.PI * 2
-        });
+    /* ---------- Hero: la luz de la nave sigue al mouse (con resorte); sola, si no hay mouse ---------- */
+    const hero = $(".hero"), lit = $(".hero-lit"), ufo = $(".ufo"), beam = $(".beam");
+    let tx = 0.5, ty = 0.6, x = 0.5, y = 0.6, vx = 0, vy = 0, user = false, idleT = 0;
+    if (fine) hero.addEventListener("pointermove", e => { const r = hero.getBoundingClientRect(); tx = (e.clientX - r.left) / r.width; ty = (e.clientY - r.top) / r.height; user = true; idleT = performance.now(); });
+    hero.addEventListener("pointerleave", () => { user = false; });
+    let heroOn = true;
+    new IntersectionObserver(([e]) => { heroOn = e.isIntersecting; }).observe(hero);
+    let last = performance.now();
+    function heroLoop(now) {
+      requestAnimationFrame(heroLoop);
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (!heroOn) return;
+      if (!user || now - idleT > 4000) {                     // patrulla sola: un ocho lento sobre el maíz
+        const t = now / 1000;
+        tx = 0.5 + Math.sin(t * 0.35) * 0.34; ty = 0.6 + Math.sin(t * 0.7) * 0.12;
       }
-    }
-    spawn();
-
-    function drawParticles() {
-      ctx.clearRect(0, 0, W, H);
-      const t = performance.now() * 0.001;
-      for (const p of particles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.pulse += 0.02;
-        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
-        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
-        const alpha = p.a * (0.6 + 0.4 * Math.sin(p.pulse));
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = p.c.replace(")", `,${alpha})`).replace("rgb", "rgba").replace("#", "");
-        // simple hex to rgba approx
-        ctx.fillStyle = hexToRgba(p.c, alpha);
-        ctx.fill();
-        // soft glow
-        if (p.r > 0.9) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
-          ctx.fillStyle = hexToRgba(p.c, alpha * 0.08);
-          ctx.fill();
-        }
+      ty = clamp(ty, 0.32, 0.92);
+      if (reduce) { x = tx; y = ty; }
+      else {                                                 // resorte: llega con algo de inercia
+        const k = 60, d = 12;
+        vx += ((tx - x) * k - vx * d) * dt; vy += ((ty - y) * k - vy * d) * dt;
+        x += vx * dt; y += vy * dt;
       }
-      requestAnimationFrame(drawParticles);
+      const W = hero.clientWidth, H = hero.clientHeight;
+      lit.style.setProperty("--mx", (x * 100).toFixed(2) + "%"); lit.style.setProperty("--my", (y * 100).toFixed(2) + "%");
+      ufo.style.translate = `${(x * W).toFixed(1)}px 10vh`;
+      ufo.style.rotate = `${clamp(vx * 18, -14, 14).toFixed(2)}deg`;
+      beam.style.setProperty("--bx", (x * W).toFixed(1) + "px");
+      beam.style.setProperty("--mx2", (x * W).toFixed(1) + "px"); beam.style.setProperty("--my2", (y * H).toFixed(1) + "px");
+      beam.style.setProperty("--rb", (Math.min(220, Math.max(120, W * 0.16)) * 0.8).toFixed(1) + "px");
     }
-    function hexToRgba(hex, a) {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r},${g},${b},${a})`;
+    requestAnimationFrame(heroLoop);
+
+    /* ---------- Niveles: el scroll cambia la escena; al cambiar, la imagen se pixela y vuelve ---------- */
+    const SRC = ["img/bar.webp", "img/persecucion.webp", "img/maizal.webp", "img/luz.webp"];
+    const imgs = SRC.map(s => { const i = new Image(); i.src = s; i.onload = () => draw(true); return i; });
+    const cv = $("#lvCanvas"), g = cv.getContext("2d"), off = document.createElement("canvas"), og = off.getContext("2d");
+    off.width = 640; off.height = 400;
+    const sec = $(".levels"), items = $$(".lv"), bars = $$(".progress b"), tag = $(".screen-tag");
+    const TIMES = ["23:41", "00:12", "00:47", "03:16"];
+    let cur = -1, lastKey = "";
+    function progress() {
+      const r = sec.getBoundingClientRect(), span = r.height - innerHeight;
+      return clamp(-r.top / span, 0, 1) * 4;                // 0..4
     }
-    drawParticles();
-
-    /* ============ Floating eyes ============ */
-    function spawnEyes() {
-      const e = document.createElement("div");
-      e.className = "eyes";
-      e.style.left = Math.random() * 90 + 5 + "%";
-      e.style.top = Math.random() * 80 + 10 + "%";
-      document.body.appendChild(e);
-      gsap.to(e, {
-        opacity: 0.7, duration: 0.4, delay: Math.random() * 2,
-        onComplete: () => gsap.to(e, {
-          opacity: 0, duration: 0.6, delay: 0.8 + Math.random(),
-          onComplete: () => e.remove()
-        })
-      });
+    function draw(force) {
+      const s = Math.min(progress(), 3.999);
+      const b = Math.round(s), d = Math.abs(s - b), edge = b > 0 && b < 4 && d < 0.16;
+      const idx = edge ? (s < b ? b - 1 : b) : Math.floor(s);
+      const block = edge && !reduce ? Math.round(1 + 23 * (1 - d / 0.16) ** 2) : 1;
+      const key = idx + ":" + block;
+      if (!force && key === lastKey) return;
+      lastKey = key;
+      const im = imgs[idx]; if (!im.complete || !im.naturalWidth) return;
+      g.imageSmoothingEnabled = false;
+      if (block <= 1) g.drawImage(im, 0, 0, 640, 400);
+      else {                                                  // pixelado: se dibuja chico y se agranda sin suavizar
+        const w = Math.max(1, Math.round(640 / block)), h = Math.max(1, Math.round(400 / block));
+        og.imageSmoothingEnabled = false; og.clearRect(0, 0, 640, 400); og.drawImage(im, 0, 0, w, h);
+        g.drawImage(off, 0, 0, w, h, 0, 0, 640, 400);
+        g.fillStyle = `rgba(109,255,154,${(0.05 * block / 24).toFixed(3)})`; g.fillRect(0, 0, 640, 400);
+        for (let i = 0; i < block * 3; i++) { g.fillStyle = `rgba(255,255,255,${(Math.random() * 0.25).toFixed(2)})`; g.fillRect(0, Math.random() * 400, 640, 1); }
+      }
+      if (idx !== cur) {
+        cur = idx;
+        items.forEach((li, i) => li.classList.toggle("on", i === idx));
+        tag.textContent = "REC " + TIMES[idx];
+      }
+      bars.forEach((el, i) => el.style.setProperty("--p", clamp(s - i, 0, 1).toFixed(3)));
     }
-    setInterval(spawnEyes, 4200);
+    let ticking = false;
+    addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(() => { ticking = false; draw(); }); } }, { passive: true });
+    addEventListener("resize", () => draw(true));
+    items.forEach((li, i) => li.addEventListener("click", () => {            // saltar a un nivel
+      const top = sec.offsetTop + (sec.offsetHeight - innerHeight) * ((i + 0.5) / 4);
+      scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
+    }));
 
-    /* ============ GSAP entrance + scroll ============ */
-    gsap.registerPlugin(ScrollTrigger);
+    /* ---------- Aparición por bloques al entrar en pantalla ---------- */
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -12% 0px" });
+    $$("[data-reveal]").forEach(el => io.observe(el));
 
-    gsap.timeline({ defaults: { ease: "power3.out" } })
-      .to(".hero-tag", { opacity: 1, y: 0, duration: 0.8, delay: 0.2 })
-      .to("h1", { opacity: 1, y: 0, duration: 1 }, "-=0.5")
-      .to(".hero-sub", { opacity: 1, y: 0, duration: 0.8 }, "-=0.6")
-      .to(".cta", { opacity: 1, y: 0, duration: 0.7 }, "-=0.5")
-      .to(".cta-secondary", { opacity: 1, duration: 0.6 }, "-=0.4");
+    /* ---------- ¿Cuál es Pepe? ---------- */
+    const stage = $("#stage"), verdict = $("#verdict"), flash = $(".flash"), whoBeam = $(".who-beam");
+    const pepes = $$(".pepe"), pimg = pepes.map(p => p.querySelector("img"));
+    let fake = 0, flickT = null;
+    function flickerLoop() {                     // la copia muestra los ojos y la boca de esa cosa un instante, cada 3 a 4,5 s
+      clearTimeout(flickT);
+      flickT = setTimeout(() => {
+        if (stage.classList.contains("done")) return;
+        const el = pimg[fake]; let n = 0;
+        const blink = () => { el.src = n % 2 ? "img/pepe.webp" : "img/pepe-alien.webp"; if (++n < 4) setTimeout(blink, 70); else flickerLoop(); };
+        blink();
+      }, 3000 + Math.random() * 1500);
+    }
+    function round() {
+      fake = Math.random() < 0.5 ? 0 : 1;
+      stage.classList.remove("done"); verdict.innerHTML = ""; whoBeam.style.opacity = 0;
+      pepes.forEach((p, i) => { p.classList.remove("flee", "down"); pimg[i].src = "img/pepe.webp"; pimg[i].style.transform = ""; });
+      flickerLoop();
+    }
+    function shoot(i) {
+      if (stage.classList.contains("done")) return;
+      stage.classList.add("done"); clearTimeout(flickT);
+      if (!reduce) { flash.animate([{ opacity: .85 }, { opacity: 0 }], { duration: 220, easing: "ease-out" }); stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake"); }
+      const right = i === fake;
+      if (right) {                               // era la copia: se vuelve lo que es y sube por la luz
+        pimg[i].src = "img/alien.webp";
+        whoBeam.style.left = (pepes[i].offsetLeft + pepes[i].offsetWidth / 2) + "px";
+        whoBeam.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, fill: "forwards", easing: "ease-out" });
+        setTimeout(() => pepes[i].classList.add("flee"), 250);
+      } else {
+        pepes[i].classList.add("down");
+        pimg[fake].src = "img/pepe-alien.webp";
+      }
+      setTimeout(() => {
+        verdict.innerHTML = right
+          ? `<p class="good">Acertaste. Esa cosa huye a la luz.</p><a class="btn" href="game.html">Jugar la noche completa</a>`
+          : `<p class="bad">Le disparaste a Pepe.</p><button class="btn btn-ghost" id="again" type="button">Otra vez</button>`;
+        const a = $("#again"); if (a) a.addEventListener("click", round);
+      }, right ? 900 : 700);
+    }
+    pepes.forEach((p, i) => p.addEventListener("click", () => shoot(i)));
+    new IntersectionObserver(([e]) => { if (e.isIntersecting && !stage.classList.contains("done")) flickerLoop(); else clearTimeout(flickT); }).observe(stage);
+    round();
 
-    gsap.utils.toArray(".feat").forEach((el, i) => {
-      gsap.to(el, {
-        opacity: 1, y: 0, duration: 0.7, delay: i * 0.08,
-        scrollTrigger: { trigger: el, start: "top 88%" }
-      });
-    });
+    /* ---------- Política de privacidad ---------- */
+    const pol = $("#privacidad");
+    const openPolicy = () => { if (!pol.open) pol.showModal(); };
+    $$("[data-policy]").forEach(b => b.addEventListener("click", openPolicy));
+    pol.querySelector("[data-close]").addEventListener("click", () => pol.close());
+    pol.addEventListener("click", e => { if (e.target === pol) pol.close(); });       // clic fuera de la ventana
+    pol.addEventListener("close", () => { if (location.hash === "#privacidad") history.replaceState(null, "", location.pathname); });
+    if (location.hash === "#privacidad") openPolicy();
 
-    gsap.to(".about-text", {
-      opacity: 1, y: 0, duration: 0.9,
-      scrollTrigger: { trigger: ".about-text", start: "top 85%" }
+    /* ---------- Música: la del maizal, desde el segundo 13 ----------
+       Se intenta al cargar. Si el navegador no deja sonar nada antes de un gesto, arranca con el primer
+       clic, tecla o toque en cualquier parte. El botón la silencia o la vuelve a activar. */
+    const music = $("#music"), sBtn = $("#sound"), sTxt = sBtn.querySelector(".txt");
+    const START = 13;
+    music.volume = 0.45;
+    let muted = false;
+    music.addEventListener("loadedmetadata", () => { if (music.currentTime < START - 1) try { music.currentTime = START; } catch (e) {} }, { once: true });
+    const ui = () => { const on = !music.paused && !muted; sBtn.classList.toggle("on", on); sBtn.classList.toggle("ask", music.paused && !muted); sBtn.setAttribute("aria-pressed", on); sTxt.textContent = on ? "Sonido" : muted ? "Sin sonido" : "Activar sonido"; };
+    const play = () => { if (muted) return; const p = music.play(); if (p && p.then) p.then(ui, ui); else ui(); };
+    music.addEventListener("play", ui); music.addEventListener("pause", ui);
+    play();
+    const unlock = e => {
+      if (e.target.closest && e.target.closest("#sound")) return;     // el botón decide solo
+      if (music.paused && !muted) play();
+      if (!music.paused || muted) ["pointerdown", "keydown", "touchstart"].forEach(t => removeEventListener(t, unlock, true));
+    };
+    ["pointerdown", "keydown", "touchstart"].forEach(t => addEventListener(t, unlock, true));
+    sBtn.addEventListener("click", () => {
+      if (!music.paused) { muted = true; music.pause(); }
+      else { muted = false; play(); }
+      ui();
     });
-    gsap.to(".about-meta", {
-      opacity: 1, y: 0, duration: 0.8, delay: 0.15,
-      scrollTrigger: { trigger: ".about-meta", start: "top 88%" }
-    });
-
-    gsap.utils.toArray(".ctrl").forEach((el, i) => {
-      gsap.to(el, {
-        opacity: 1, y: 0, duration: 0.5, delay: i * 0.05,
-        scrollTrigger: { trigger: el, start: "top 90%" }
-      });
-    });
-
-    gsap.to(".final h2", {
-      opacity: 1, duration: 0.8,
-      scrollTrigger: { trigger: ".final", start: "top 80%" }
-    });
-    gsap.to(".final p", {
-      opacity: 1, duration: 0.7, delay: 0.1,
-      scrollTrigger: { trigger: ".final", start: "top 80%" }
-    });
-
-    /* Subtle parallax on hero title */
-    gsap.to("h1", {
-      y: 40,
-      scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true }
-    });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) music.pause(); else play(); });   // en otra pestaña, calla
+    ui();
+  })();
   </script>
 </body>
 </html>
