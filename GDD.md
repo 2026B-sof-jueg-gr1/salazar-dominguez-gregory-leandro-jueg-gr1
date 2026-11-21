@@ -207,7 +207,7 @@ H......#     _ patio (lugar apartado) · F cerca baja
 
 | Referencia del alien | Referencia del alien | Resultado en el juego |
 |---|---|---|
-| ![](img/referencia_1.webp) | ![](referencia_2.webp) | ![](img/luz.webp) |
+| ![](img/referencia_1.webp) | ![](img/referencia_2.webp) | ![](img/luz.webp) |
 | Cabeza sin pelo, ojos y boca negros, estética de video casero | Movimiento brusco y borroso | El claro del nivel 4 bajo la luz verde |
 
 **Tipografía:** Silkscreen (pixel) para títulos y etiquetas; Atkinson Hyperlegible para diálogos y números, por legibilidad.
