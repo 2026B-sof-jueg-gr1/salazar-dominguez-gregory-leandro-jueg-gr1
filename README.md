@@ -65,16 +65,6 @@ No necesita internet: las fuentes, imágenes y música están en el repositorio.
 | `GDD.md` / `GDD.pdf` | Game Design Document |
 | `tools/gdd-pdf.mjs` | Genera `GDD.pdf` desde `GDD.md` |
 
-### Regenerar el PDF del GDD
-
-Si cambias `GDD.md`, vuelve a generar el PDF desde la raíz del repo:
-
-```bash
-node tools/gdd-pdf.mjs
-```
-
-Necesita Node 18 o superior, Google Chrome y conexión a internet (descarga `marked` y Mermaid al momento).
-
 ## Privacidad
 
 El juego no recoge datos, no usa cookies ni analítica. Solo guarda el volumen elegido en tu navegador (`maizal.vol`). La política completa está en la landing.
